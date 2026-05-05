@@ -1,0 +1,1 @@
+ALTER TABLE optimization_suggestions ADD COLUMN applied_at TIMESTAMP;

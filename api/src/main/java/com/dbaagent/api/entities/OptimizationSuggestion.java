@@ -1,11 +1,18 @@
 package com.dbaagent.api.entities;
 
 import com.dbaagent.api.enums.SuggestionStatus;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "optimization_suggestions")
 public class OptimizationSuggestion {
@@ -14,11 +21,18 @@ public class OptimizationSuggestion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "schema_hash", nullable = false)
-    private String schemaHash;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", nullable = false)
+    private Tenant tenant;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String diagnosis;
+    @Column(name = "database_name", nullable = false)
+    private String databaseName;
+
+    @Column(name = "table_name")
+    private String tableName;
+
+    @Column(name = "suggestion_text", columnDefinition = "TEXT", nullable = false)
+    private String suggestionText;
 
     @Column(name = "up_script", columnDefinition = "TEXT", nullable = false)
     private String upScript;
@@ -28,54 +42,19 @@ public class OptimizationSuggestion {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SuggestionStatus status = SuggestionStatus.PENDING;
+    private SuggestionStatus status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 
     @Column(name = "applied_at")
     private LocalDateTime appliedAt;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id")
-    private Tenant tenant;
-
-    // Construtor vazio obrigatório do JPA
-    public OptimizationSuggestion() {}
-
-    public OptimizationSuggestion(String schemaHash, String diagnosis, String upScript, String downScript) {
-        this.schemaHash = schemaHash;
-        this.diagnosis = diagnosis;
-        this.upScript = upScript;
-        this.downScript = downScript;
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        if (this.status == null) {
+            this.status = SuggestionStatus.PENDING;
+        }
     }
-
-    // Getters e Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public String getSchemaHash() { return schemaHash; }
-    public void setSchemaHash(String schemaHash) { this.schemaHash = schemaHash; }
-
-    public String getDiagnosis() { return diagnosis; }
-    public void setDiagnosis(String diagnosis) { this.diagnosis = diagnosis; }
-
-    public String getUpScript() { return upScript; }
-    public void setUpScript(String upScript) { this.upScript = upScript; }
-
-    public String getDownScript() { return downScript; }
-    public void setDownScript(String downScript) { this.downScript = downScript; }
-
-    public SuggestionStatus getStatus() { return status; }
-    public void setStatus(SuggestionStatus status) { this.status = status; }
-
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    public LocalDateTime getAppliedAt() { return appliedAt; }
-    public void setAppliedAt(LocalDateTime appliedAt) { this.appliedAt = appliedAt; }
-
-    public Tenant getTenant() { return tenant; }
-    public void setTenant(Tenant tenant) { this.tenant = tenant; }
 }

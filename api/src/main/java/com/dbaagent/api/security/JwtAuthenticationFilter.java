@@ -6,14 +6,17 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -27,38 +30,43 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) 
-            throws ServletException, IOException {
-        
-        final String authHeader = request.getHeader("Authorization");
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
 
-        // Se não tem token, deixa passar (o SecurityConfig vai bloquear lá na frente se a rota for protegida)
+        final String authHeader = request.getHeader("Authorization");
+        final String jwt;
+        final String userEmail;
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        try {
-            final String jwt = authHeader.substring(7); // Tira a palavra "Bearer "
-            final String userEmail = jwtService.extractEmail(jwt);
+        jwt = authHeader.substring(7);
+        userEmail = jwtService.extractUsername(jwt);
 
-            // Se achou o email no token e o usuário ainda não está autenticado no contexto atual
-            if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                User user = userRepository.findByEmail(userEmail).orElse(null);
+        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            Optional<User> userOpt = userRepository.findByEmail(userEmail);
 
-                if (user != null && user.getActive()) {
-                    // Cria a permissão oficial do Spring Security e avisa: "Pode deixar esse cara entrar!"
-                    SimpleGrantedAuthority authority = new SimpleGrantedAuthority(user.getRole());
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                
+                if (jwtService.isTokenValid(jwt, user) && user.getActive()) {
+                    List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(user.getRole()));
+
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            user, null, Collections.singletonList(authority)
+                            user,
+                            null,
+                            authorities
                     );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (Exception e) {
-            // Se o token estiver vencido ou adulterado, o bloco catch ignora e o Spring vai barrar com 401
         }
-
         filterChain.doFilter(request, response);
     }
 }

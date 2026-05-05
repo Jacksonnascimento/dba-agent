@@ -3,11 +3,13 @@ package com.dbaagent.api.controllers.auth;
 import com.dbaagent.api.entities.User;
 import com.dbaagent.api.repositories.UserRepository;
 import com.dbaagent.api.security.JwtService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -28,20 +30,18 @@ public class AuthController {
         String email = credentials.get("email");
         String password = credentials.get("password");
 
-        User user = userRepository.findByEmail(email).orElse(null);
+        Optional<User> userOpt = userRepository.findByEmail(email);
 
-        // Verifica se o usuário existe e se a senha digitada bate com o hash salvo no banco
-        if (user != null && passwordEncoder.matches(password, user.getPasswordHash())) {
-            // Sucesso! Gera o crachá e entrega pro usuário
-            String token = jwtService.generateToken(user);
-            return ResponseEntity.ok(Map.of(
-                    "token", token,
-                    "role", user.getRole(),
-                    "tenantId", user.getTenant().getId()
-            ));
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            if (passwordEncoder.matches(password, user.getPasswordHash())) {
+                if (!user.getActive()) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Usuário inativo");
+                }
+                String token = jwtService.generateToken(user);
+                return ResponseEntity.ok(Map.of("token", token));
+            }
         }
-
-        // Se errou a senha ou email, manda dar meia volta
-        return ResponseEntity.status(401).body(Map.of("erro", "Credenciais inválidas"));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciais inválidas");
     }
 }

@@ -11,36 +11,32 @@ import org.springframework.stereotype.Component;
 @Component
 public class DataLoader implements CommandLineRunner {
 
-    private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
+    private final TenantRepository tenantRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public DataLoader(TenantRepository tenantRepository, UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.tenantRepository = tenantRepository;
+    public DataLoader(UserRepository userRepository, TenantRepository tenantRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.tenantRepository = tenantRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public void run(String... args) throws Exception {
-        // Só cria se o banco estiver vazio
-        if (tenantRepository.count() == 0) {
+        if (userRepository.count() == 0) {
             Tenant tenant = new Tenant();
-            tenant.setName("DBA Agent Matrix");
-            tenant.setActive(true);
+            tenant.setName("Horizon AJ");
             tenant = tenantRepository.save(tenant);
 
-            User user = new User();
-            user.setTenant(tenant);
-            user.setName("Neo DBA");
-            user.setEmail("neo@dbaagent.com");
-            // Aqui o próprio Spring vai gerar o Hash da maneira correta!
-            user.setPasswordHash(passwordEncoder.encode("123456")); 
-            user.setRole("ROLE_ADMIN");
-            user.setActive(true);
-            userRepository.save(user);
+            User admin = new User();
+            admin.setName("Admin DBA Agent");
+            admin.setEmail("admin@horizonaj.com");
+            admin.setPasswordHash(passwordEncoder.encode("admin123"));
+            admin.setRole("ROLE_ADMIN");
+            admin.setActive(true);
+            admin.setTenant(tenant);
 
-            System.out.println("✅ Usuário e Tenant de teste criados com sucesso pelo Spring!");
+            userRepository.save(admin);
         }
     }
 }

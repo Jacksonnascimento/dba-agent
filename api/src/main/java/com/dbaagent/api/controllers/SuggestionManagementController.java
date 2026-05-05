@@ -1,6 +1,6 @@
 package com.dbaagent.api.controllers;
 
-import com.dbaagent.api.entities.OptimizationSuggestion;
+import com.dbaagent.api.dtos.SuggestionResponseDTO;
 import com.dbaagent.api.entities.User;
 import com.dbaagent.api.services.SuggestionManagementService;
 import org.springframework.http.ResponseEntity;
@@ -13,24 +13,33 @@ import java.util.List;
 @RequestMapping("/api/v1/suggestions")
 public class SuggestionManagementController {
 
-    private final SuggestionManagementService service;
+    private final SuggestionManagementService suggestionService;
 
-    public SuggestionManagementController(SuggestionManagementService service) {
-        this.service = service;
+    public SuggestionManagementController(SuggestionManagementService suggestionService) {
+        this.suggestionService = suggestionService;
     }
 
     @GetMapping("/pending")
-    public ResponseEntity<List<OptimizationSuggestion>> getPendingSuggestions(@AuthenticationPrincipal User loggedUser) {
-        return ResponseEntity.ok(service.listPending(loggedUser.getTenant()));
+    public ResponseEntity<List<SuggestionResponseDTO>> getPendingSuggestions(@AuthenticationPrincipal User authenticatedUser) {
+        List<SuggestionResponseDTO> pending = suggestionService.listPending(authenticatedUser.getTenant());
+        return ResponseEntity.ok(pending);
     }
 
-    @PatchMapping("/{id}/approve")
-    public ResponseEntity<OptimizationSuggestion> approveSuggestion(@PathVariable Long id, @AuthenticationPrincipal User loggedUser) {
-        return ResponseEntity.ok(service.approve(id, loggedUser.getTenant()));
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<SuggestionResponseDTO> approveSuggestion(
+            @PathVariable Long id, 
+            @AuthenticationPrincipal User authenticatedUser) {
+        
+        SuggestionResponseDTO approved = suggestionService.approve(id, authenticatedUser.getTenant());
+        return ResponseEntity.ok(approved);
     }
 
-    @PatchMapping("/{id}/reject")
-    public ResponseEntity<OptimizationSuggestion> rejectSuggestion(@PathVariable Long id, @AuthenticationPrincipal User loggedUser) {
-        return ResponseEntity.ok(service.reject(id, loggedUser.getTenant()));
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<SuggestionResponseDTO> rejectSuggestion(
+            @PathVariable Long id, 
+            @AuthenticationPrincipal User authenticatedUser) {
+        
+        SuggestionResponseDTO rejected = suggestionService.reject(id, authenticatedUser.getTenant());
+        return ResponseEntity.ok(rejected);
     }
 }
