@@ -3,6 +3,8 @@ package com.dbaagent.api.services;
 import com.dbaagent.api.dtos.AiAnalysisResultDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -28,23 +30,34 @@ public class GeminiIntegrationService {
             String apiKey,
             String aiModel,
             String dbEngine) {
+        
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" + aiModel + ":generateContent?key=" + apiKey;
 
         String prompt = String.format(
             "Você é um DBA Sênior focado em performance de %s.\n\n" +
-            "OBJETIVO: sugerir otimizações complexas e seguras (com deploy e rollback), baseadas no contexto completo.\n\n" +
+            "OBJETIVO: sugerir otimizações complexas e seguras (com deploy e rollback), " +
+            "baseadas no contexto completo fornecido abaixo.\n\n" +
             "## Estrutura (DDL)\n%s\n\n" +
             "## DMVs / Estatísticas dinâmicas\n%s\n\n" +
             "## Wait Stats\n%s\n\n" +
             "## Top Queries (consultas mais custosas)\n%s\n\n" +
             "## Index Stats / Fragmentação / Missing indexes\n%s\n\n" +
             "## Execution Plans (planos de execução)\n%s\n\n" +
-            "REGRAS:\n" +
-            "- Gere no máximo 3 sugestões priorizadas.\n" +
-            "- Cada sugestão deve ter up_script e down_script aplicáveis e compatíveis com o banco.\n" +
-            "- Evite mudanças destrutivas; se houver risco, descreva no diagnostico.\n\n" +
-            "Responda EXCLUSIVAMENTE em JSON com as chaves exatas: " +
-            "'diagnostico', 'up_script', 'down_script'. Não adicione textos fora do JSON.",
+            "REGRAS OBRIGATÓRIAS:\n" +
+            "1. Gere no máximo 3 sugestões consolidadas e priorizadas.\n" +
+            "2. TOLERÂNCIA A DDL TRUNCADO: É esperado que a Estrutura (DDL) esteja incompleta " +
+            "devido a limites de coleta. Se as DMVs, Top Queries ou Missing Indexes indicarem " +
+            "problemas em tabelas ou colunas que NÃO constam no DDL fornecido, VOCÊ É OBRIGADO " +
+            "A INFERIR A ESTRUTURA (assumindo chaves primárias e estrangeiras lógicas padrão). " +
+            "NUNCA DEIXE up_script E down_script VAZIOS. Gere os scripts no modo 'best-effort' " +
+            "com a estrutura inferida e avise sobre essa premissa no texto do diagnostico.\n" +
+            "3. Cada sugestão deve OBRIGATORIAMENTE conter 'up_script' e 'down_script' com sintaxe " +
+            "T-SQL / SQL válida e executável.\n" +
+            "4. Evite mudanças destrutivas; se houver risco de bloqueio de tabela prolongado, " +
+            "descreva no diagnostico.\n\n" +
+            "Responda EXCLUSIVAMENTE em JSON puro com as chaves exatas: \"diagnostico\", " +
+            "\"up_script\", \"down_script\". Não inclua formatação markdown como ```json, " +
+            "devolva apenas o objeto JSON.",
             dbEngine,
             ddl,
             (dmvStats != null ? dmvStats : "N/A"),
@@ -54,12 +67,24 @@ public class GeminiIntegrationService {
             (executionPlans != null ? executionPlans : "N/A")
         );
 
-        String requestBody = String.format(
-            "{\"contents\": [{\"parts\": [{\"text\": \"%s\"}]}]}",
-            prompt.replace("\"", "\\\"").replace("\n", "\\n")
-        );
-
         try {
+            ObjectNode textPart = objectMapper.createObjectNode();
+            textPart.put("text", prompt);
+            
+            ArrayNode partsArray = objectMapper.createArrayNode();
+            partsArray.add(textPart);
+            
+            ObjectNode contentNode = objectMapper.createObjectNode();
+            contentNode.set("parts", partsArray);
+            
+            ArrayNode contentsArray = objectMapper.createArrayNode();
+            contentsArray.add(contentNode);
+            
+            ObjectNode requestBodyNode = objectMapper.createObjectNode();
+            requestBodyNode.set("contents", contentsArray);
+            
+            String requestBody = objectMapper.writeValueAsString(requestBodyNode);
+
             String response = restClient.post()
                     .uri(url)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -69,16 +94,21 @@ public class GeminiIntegrationService {
 
             JsonNode rootNode = objectMapper.readTree(response);
             String rawText = rootNode.path("candidates").get(0)
-                           .path("content").path("parts").get(0)
-                           .path("text").asText();
+                                   .path("content").path("parts").get(0)
+                                   .path("text").asText();
 
-            String cleanedJson = rawText.replaceAll("^```json\\s*", "").replaceAll("\\s*```$", "").trim();
+            String cleanedJson = rawText.replaceAll("(?i)^```json\\s*", "")
+                                        .replaceAll("(?i)^```\\s*", "")
+                                        .replaceAll("\\s*```$", "")
+                                        .trim();
 
             return objectMapper.readValue(cleanedJson, AiAnalysisResultDTO.class);
 
         } catch (Exception e) {
             AiAnalysisResultDTO errorDto = new AiAnalysisResultDTO();
-            errorDto.setDiagnostico("Erro ao processar integração: " + e.getMessage());
+            errorDto.setDiagnostico("Erro ao processar integração com Gemini: " + e.getMessage());
+            errorDto.setUpScript("-- Erro de integracao\n");
+            errorDto.setDownScript("-- Erro de integracao\n");
             return errorDto;
         }
     }

@@ -12,13 +12,13 @@ import (
 
 // DTO de Envio de Telemetria
 type TelemetryRequest struct {
-	DbEngine        string `json:"dbEngine"`
-	SchemaDdl       string `json:"schemaDdl"`
-	DmvStats        string `json:"dmvStats"`
-	WaitStats       string `json:"waitStats,omitempty"`
-	TopQueries      string `json:"topQueries,omitempty"`
-	ExecutionPlans  string `json:"executionPlans,omitempty"`
-	IndexStats      string `json:"indexStats,omitempty"`
+	DbEngine       string `json:"dbEngine"`
+	SchemaDdl      string `json:"schemaDdl"`
+	DmvStats       string `json:"dmvStats"`
+	WaitStats      string `json:"waitStats,omitempty"`
+	TopQueries     string `json:"topQueries,omitempty"`
+	ExecutionPlans string `json:"executionPlans,omitempty"`
+	IndexStats     string `json:"indexStats,omitempty"`
 }
 
 // DTO de Recebimento de Tarefa (Aprovada)
@@ -33,9 +33,9 @@ type TaskResponse struct {
 	Status               string `json:"status"`
 }
 
-// Cliente HTTP configurado com timeout
+// Cliente HTTP configurado com timeout expandido (5 minutos) para suportar LLMs síncronos
 var client = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 5 * time.Minute,
 }
 
 // Envia os dados do banco para a API Central analisar
@@ -64,7 +64,7 @@ func SendTelemetry(apiURL string, token string, reqBody TelemetryRequest) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 201 {
+	if resp.StatusCode == 201 || resp.StatusCode == 200 || resp.StatusCode == 202 {
 		log.Println("📡 Telemetria enviada com sucesso! Aguardando análise/aprovação.")
 	} else {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -126,7 +126,7 @@ func MarkTaskCompleted(apiURL string, token string, taskID int64) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == 200 || resp.StatusCode == 204 {
 		log.Printf("✅ Tarefa #%d marcada como EXECUTADA na API Central.\n", taskID)
 	} else {
 		log.Printf("⚠️ Falha ao concluir tarefa #%d. Status: %d\n", taskID, resp.StatusCode)

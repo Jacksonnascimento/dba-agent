@@ -41,6 +41,9 @@ public class OptimizationSuggestion {
     @Column(name = "table_name")
     private String tableName;
 
+    @Column(name = "diagnosis", columnDefinition = "TEXT", nullable = false)
+    private String diagnosis;
+
     @Column(name = "suggestion_text", columnDefinition = "TEXT", nullable = false)
     private String suggestionText;
 

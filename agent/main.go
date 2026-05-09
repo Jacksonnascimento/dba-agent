@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,7 +27,7 @@ func limitPayload(s string, max int) string {
 func main() {
 	fmt.Println("=======================================================")
 	fmt.Println("🚀 DBA Agent Worker iniciado com sucesso (Golang).")
-	fmt.Println("🛡️  Modo Operacional: M2M (Machine-to-Machine)")
+	fmt.Println("🛡️  Modo Operacional: M2M (Machine-to-Machine) Concorrente")
 	fmt.Println("=======================================================")
 
 	apiURL := os.Getenv("API_URL")
@@ -40,17 +41,42 @@ func main() {
 		return
 	}
 
-	intervalo := 10 * time.Second
-	ticker := time.NewTicker(intervalo)
-	defer ticker.Stop()
+	log.Printf("⚙️ Inicializando fluxos para %d alvo(s).\n", len(targets))
 
-	log.Printf("⏳ Agendador configurado. Ciclo a cada %v com %d alvo(s).\n", intervalo, len(targets))
+	var wg sync.WaitGroup
 
-	executarCiclo(apiURL, targets)
+	// Fluxo 1: Extração Massiva (Snapshots) - Executa ao iniciar e depois a cada 24 horas
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		telemetryInterval := 24 * time.Hour
+		log.Printf("⏳ [TELEMETRIA] Agendador configurado para rodar a cada %v.\n", telemetryInterval)
+		
+		executarExtraçãoTelemetria(apiURL, targets) // Executa a primeira vez imediatamente
+		
+		ticker := time.NewTicker(telemetryInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			executarExtraçãoTelemetria(apiURL, targets)
+		}
+	}()
 
-	for range ticker.C {
-		executarCiclo(apiURL, targets)
-	}
+	// Fluxo 2: Polling de Tarefas Aprovadas - Executa a cada 5 segundos
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tasksInterval := 5 * time.Second
+		log.Printf("⏳ [TAREFAS] Agendador configurado para rodar a cada %v.\n", tasksInterval)
+		
+		ticker := time.NewTicker(tasksInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			verificarEExecutarTarefas(apiURL, targets)
+		}
+	}()
+
+	// Mantém a aplicação rodando
+	wg.Wait()
 }
 
 func loadTargetsFromEnv() []AgentTarget {
@@ -94,17 +120,16 @@ func loadTargetsFromEnv() []AgentTarget {
 	}
 }
 
-func executarCiclo(apiURL string, targets []AgentTarget) {
-	log.Println("🔄 Iniciando ciclo de trabalho...")
+func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
+	log.Println("🔄 [TELEMETRIA] Iniciando extração massiva...")
 
 	for _, target := range targets {
-		log.Printf("🧭 Alvo: %s (%s)\n", target.Name, target.DbEngine)
 		var ddl, dmv string
 		var waits, topq, idxstats, plans string
 		if target.DbConnString != "" && strings.EqualFold(target.DbEngine, "SQL Server") {
 			db, err := ConnectDB(target.DbConnString)
 			if err != nil {
-				log.Printf("❌ Erro ao conectar no alvo '%s': %v\n", target.Name, err)
+				log.Printf("❌ [TELEMETRIA] Erro ao conectar no alvo '%s': %v\n", target.Name, err)
 				continue
 			}
 			ddl, _ = ExtractSchema(db)
@@ -114,7 +139,7 @@ func executarCiclo(apiURL string, targets []AgentTarget) {
 			idxstats, _ = ExtractIndexStats(db)
 			plans, _ = ExtractExecutionPlans(db)
 			db.Close()
-			log.Printf("📦 Telemetria extraída do alvo '%s'.\n", target.Name)
+			log.Printf("📦 [TELEMETRIA] Dados extraídos do alvo '%s'.\n", target.Name)
 		} else {
 			ddl = "CREATE TABLE faturamento_vendas (id INT PRIMARY KEY, valor DECIMAL, cliente_id INT, data_venda TIMESTAMP, status char(2));"
 			dmv = "Modo fallback/mock para alvo sem conexão SQL Server configurada."
@@ -122,14 +147,11 @@ func executarCiclo(apiURL string, targets []AgentTarget) {
 			topq = ""
 			idxstats = ""
 			plans = ""
-			if !strings.EqualFold(target.DbEngine, "SQL Server") {
-				log.Printf("⚠️ Engine %s ainda sem extractor nativo. Enviando mock para '%s'.\n", target.DbEngine, target.Name)
-			}
 		}
 
 		telemetry := TelemetryRequest{
 			DbEngine:       target.DbEngine,
-			SchemaDdl:      limitPayload(ddl, 12000),
+			SchemaDdl:      limitPayload(ddl, 150000),
 			DmvStats:       limitPayload(dmv, 12000),
 			WaitStats:      limitPayload(waits, 12000),
 			TopQueries:     limitPayload(topq, 20000),
@@ -137,33 +159,33 @@ func executarCiclo(apiURL string, targets []AgentTarget) {
 			ExecutionPlans: limitPayload(plans, 60000),
 		}
 		SendTelemetry(apiURL, target.AgentToken, telemetry)
+	}
+	log.Println("✅ [TELEMETRIA] Ciclo de extração finalizado.")
+}
 
+func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
+	for _, target := range targets {
 		tasks := FetchPendingTasks(apiURL, target.AgentToken)
 		for _, task := range tasks {
-			log.Printf("⚙️ Processando Tarefa #%d para '%s'...\n", task.ID, target.Name)
-			if task.DatabaseName != "" && !strings.EqualFold(task.DatabaseName, target.Name) {
-				log.Printf("ℹ️ Tarefa vinculada ao banco '%s' (alvo local: '%s').\n", task.DatabaseName, target.Name)
-			}
+			log.Printf("⚙️ [TAREFAS] Processando Tarefa #%d para '%s'...\n", task.ID, target.Name)
+			
 			if target.DbConnString != "" && strings.EqualFold(target.DbEngine, "SQL Server") {
 				db, err := ConnectDB(target.DbConnString)
 				if err != nil {
-					log.Printf("❌ Falha ao conectar para executar tarefa %d: %v\n", task.ID, err)
+					log.Printf("❌ [TAREFAS] Falha ao conectar para executar tarefa %d: %v\n", task.ID, err)
 					continue
 				}
 				err = ExecuteScript(db, task.UpScript)
 				db.Close()
 				if err != nil {
-					log.Printf("❌ Erro ao executar UpScript da Tarefa #%d: %v\n", task.ID, err)
+					log.Printf("❌ [TAREFAS] Erro ao executar UpScript da Tarefa #%d: %v\n", task.ID, err)
 					continue
 				}
-				log.Println("📜 Script de Deploy executado com sucesso no banco local!")
+				log.Println("📜 [TAREFAS] Script de Deploy executado com sucesso no banco local!")
 			} else {
-				log.Println("⚠️ MOCK MODE: Simulação de execução do script.")
+				log.Println("⚠️ [TAREFAS] MOCK MODE: Simulação de execução do script.")
 			}
 			MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
 		}
 	}
-
-	log.Println("✅ Ciclo finalizado. Voltando a dormir.")
-	fmt.Println("-------------------------------------------------------")
 }

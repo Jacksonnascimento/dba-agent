@@ -58,7 +58,7 @@ public class OptimizationAnalysisService {
             String dmvStats,
             String dbEngine,
             String aiModel) {
-        // Chamadas manuais (web) ainda não enviam o contexto completo; por enquanto tratamos como "lite".
+        
         String ddl = schemaDdl != null ? schemaDdl.trim() : "";
         String hash = sha256Hex(ddl);
         String dbName = databaseConnection.getName();
@@ -152,6 +152,7 @@ public class OptimizationAnalysisService {
 
         try {
             String cachePayload = objectMapper.writeValueAsString(ai);
+            // Passamos hash nos dois parametros para não violar constraint do BD interno
             semanticCacheService.saveToCache(hash, hash, cachePayload, "GEMINI", tenant, databaseConnection);
         } catch (Exception ignored) {
             // cache best-effort
@@ -184,6 +185,7 @@ public class OptimizationAnalysisService {
             String indexStats,
             String dbEngine,
             String aiModel) {
+        
         String ddl = schemaDdl != null ? schemaDdl.trim() : "";
         String schemaHash = sha256Hex(ddl);
         String contextHash = sha256Hex(
@@ -277,7 +279,8 @@ public class OptimizationAnalysisService {
 
         try {
             String cachePayload = objectMapper.writeValueAsString(ai);
-            semanticCacheService.saveToCache(schemaHash, contextHash, cachePayload, "GEMINI", tenant, databaseConnection);
+            // Passamos contextHash nos dois parametros para contornar a constraint uk_schema_hash momentaneamente e evitar transação envenenada
+            semanticCacheService.saveToCache(contextHash, contextHash, cachePayload, "GEMINI", tenant, databaseConnection);
         } catch (Exception ignored) {
         }
 
@@ -315,6 +318,7 @@ public class OptimizationAnalysisService {
                 .databaseName(databaseName)
                 .tableName(tableName)
                 .suggestionText(suggestionText)
+                .diagnosis(suggestionText) // Preenche a coluna obrigatória
                 .upScript(upScript)
                 .downScript(downScript)
                 .status(status)
