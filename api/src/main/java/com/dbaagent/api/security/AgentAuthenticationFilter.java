@@ -37,19 +37,27 @@ public class AgentAuthenticationFilter extends OncePerRequestFilter {
 
         String tokenHeader = request.getHeader("X-Agent-Token");
 
-        if (tokenHeader != null && !tokenHeader.isEmpty()) {
-            Optional<AgentToken> agentOpt = agentTokenRepository.findByTokenWithTenant(tokenHeader);
-
-            if (agentOpt.isPresent()) {
-                AgentToken agentToken = agentOpt.get();
-                // Dá o crachá oficial de "Robô" para essa requisição
-                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_AGENT");
-                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                        agentToken, null, Collections.singletonList(authority)
-                );
-                SecurityContextHolder.getContext().setAuthentication(auth);
-            }
+        if (tokenHeader == null || tokenHeader.isEmpty()) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing X-Agent-Token");
+            return;
         }
+
+        Optional<AgentToken> agentOpt = agentTokenRepository.findByTokenWithTenant(tokenHeader);
+        if (agentOpt.isEmpty()) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid X-Agent-Token");
+            return;
+        }
+
+        AgentToken agentToken = agentOpt.get();
+        if (!Boolean.TRUE.equals(agentToken.getDatabaseConnection().getActive())) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Database connection is inactive");
+            return;
+        }
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_AGENT");
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                agentToken, null, Collections.singletonList(authority)
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
 
         filterChain.doFilter(request, response);
     }

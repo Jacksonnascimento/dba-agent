@@ -18,20 +18,40 @@ public class GeminiIntegrationService {
         this.objectMapper = objectMapper;
     }
 
-    // Método atualizado para receber o dbEngine
-    public AiAnalysisResultDTO analyzeWithGemini(String ddl, String dmvStats, String apiKey, String aiModel, String dbEngine) {
+    public AiAnalysisResultDTO analyzeWithGeminiRich(
+            String ddl,
+            String dmvStats,
+            String waitStats,
+            String topQueries,
+            String executionPlans,
+            String indexStats,
+            String apiKey,
+            String aiModel,
+            String dbEngine) {
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" + aiModel + ":generateContent?key=" + apiKey;
 
-        // PROMPT DINÂMICO: Agora a IA sabe exatamente qual é o banco!
         String prompt = String.format(
-            "Você é um DBA Sênior focado em performance de %s. " +
-            "Analise a seguinte estrutura: \n%s\n\n" +
-            "Estatísticas dinâmicas (se houver): %s\n\n" +
-            "Responda EXCLUSIVAMENTE em formato JSON com as chaves exatas: " +
-            "'diagnostico' (explicação do problema focado na arquitetura do banco especificado), " +
-            "'up_script' (código SQL compatível com o banco para aplicar a melhoria) e " +
-            "'down_script' (código SQL compatível com o banco para reverter a melhoria). Não adicione textos fora do JSON.",
-            dbEngine, ddl, (dmvStats != null ? dmvStats : "N/A")
+            "Você é um DBA Sênior focado em performance de %s.\n\n" +
+            "OBJETIVO: sugerir otimizações complexas e seguras (com deploy e rollback), baseadas no contexto completo.\n\n" +
+            "## Estrutura (DDL)\n%s\n\n" +
+            "## DMVs / Estatísticas dinâmicas\n%s\n\n" +
+            "## Wait Stats\n%s\n\n" +
+            "## Top Queries (consultas mais custosas)\n%s\n\n" +
+            "## Index Stats / Fragmentação / Missing indexes\n%s\n\n" +
+            "## Execution Plans (planos de execução)\n%s\n\n" +
+            "REGRAS:\n" +
+            "- Gere no máximo 3 sugestões priorizadas.\n" +
+            "- Cada sugestão deve ter up_script e down_script aplicáveis e compatíveis com o banco.\n" +
+            "- Evite mudanças destrutivas; se houver risco, descreva no diagnostico.\n\n" +
+            "Responda EXCLUSIVAMENTE em JSON com as chaves exatas: " +
+            "'diagnostico', 'up_script', 'down_script'. Não adicione textos fora do JSON.",
+            dbEngine,
+            ddl,
+            (dmvStats != null ? dmvStats : "N/A"),
+            (waitStats != null ? waitStats : "N/A"),
+            (topQueries != null ? topQueries : "N/A"),
+            (indexStats != null ? indexStats : "N/A"),
+            (executionPlans != null ? executionPlans : "N/A")
         );
 
         String requestBody = String.format(
@@ -61,5 +81,10 @@ public class GeminiIntegrationService {
             errorDto.setDiagnostico("Erro ao processar integração: " + e.getMessage());
             return errorDto;
         }
+    }
+
+    // Compatibilidade com chamadas antigas
+    public AiAnalysisResultDTO analyzeWithGemini(String ddl, String dmvStats, String apiKey, String aiModel, String dbEngine) {
+        return analyzeWithGeminiRich(ddl, dmvStats, null, null, null, null, apiKey, aiModel, dbEngine);
     }
 }

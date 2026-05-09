@@ -25,6 +25,16 @@ public class OptimizationSuggestion {
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "database_connection_id", nullable = false)
+    private DatabaseConnection databaseConnection;
+
+    @Column(name = "schema_hash", length = 255)
+    private String schemaHash;
+
+    @Column(name = "context_hash", nullable = false, length = 255)
+    private String contextHash;
+
     @Column(name = "database_name", nullable = false)
     private String databaseName;
 
@@ -55,6 +65,9 @@ public class OptimizationSuggestion {
         this.createdAt = LocalDateTime.now();
         if (this.status == null) {
             this.status = SuggestionStatus.PENDING;
+        }
+        if (this.contextHash == null || this.contextHash.isBlank()) {
+            this.contextHash = this.schemaHash;
         }
     }
 }

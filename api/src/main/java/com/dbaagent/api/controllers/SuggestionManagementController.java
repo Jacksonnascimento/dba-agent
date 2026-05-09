@@ -20,8 +20,11 @@ public class SuggestionManagementController {
     }
 
     @GetMapping("/pending")
-    public ResponseEntity<List<SuggestionResponseDTO>> getPendingSuggestions(@AuthenticationPrincipal User authenticatedUser) {
-        List<SuggestionResponseDTO> pending = suggestionService.listPending(authenticatedUser.getTenant());
+    public ResponseEntity<List<SuggestionResponseDTO>> getPendingSuggestions(
+            @AuthenticationPrincipal User authenticatedUser,
+            @RequestParam(required = false) Long databaseConnectionId) {
+        List<SuggestionResponseDTO> pending =
+                suggestionService.listPending(authenticatedUser.getTenant(), databaseConnectionId);
         return ResponseEntity.ok(pending);
     }
 
@@ -30,7 +33,7 @@ public class SuggestionManagementController {
             @PathVariable Long id, 
             @AuthenticationPrincipal User authenticatedUser) {
         
-        SuggestionResponseDTO approved = suggestionService.approve(id, authenticatedUser.getTenant());
+        SuggestionResponseDTO approved = suggestionService.approve(id, authenticatedUser.getTenant(), authenticatedUser);
         return ResponseEntity.ok(approved);
     }
 
@@ -39,7 +42,7 @@ public class SuggestionManagementController {
             @PathVariable Long id, 
             @AuthenticationPrincipal User authenticatedUser) {
         
-        SuggestionResponseDTO rejected = suggestionService.reject(id, authenticatedUser.getTenant());
+        SuggestionResponseDTO rejected = suggestionService.reject(id, authenticatedUser.getTenant(), authenticatedUser);
         return ResponseEntity.ok(rejected);
     }
 }

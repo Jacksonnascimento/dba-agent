@@ -15,6 +15,10 @@ public class AgentToken {
     @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "database_connection_id", nullable = false)
+    private DatabaseConnection databaseConnection;
+
     @Column(nullable = false, unique = true)
     private String token;
 
@@ -38,6 +42,14 @@ public class AgentToken {
 
     public Tenant getTenant() { return tenant; }
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
+
+    public DatabaseConnection getDatabaseConnection() {
+        return databaseConnection;
+    }
+
+    public void setDatabaseConnection(DatabaseConnection databaseConnection) {
+        this.databaseConnection = databaseConnection;
+    }
 
     public String getToken() { return token; }
     public void setToken(String token) { this.token = token; }

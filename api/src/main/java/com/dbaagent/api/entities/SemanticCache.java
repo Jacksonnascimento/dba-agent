@@ -11,8 +11,11 @@ public class SemanticCache {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "schema_hash", nullable = false, unique = true, length = 255)
+    @Column(name = "schema_hash", nullable = false, length = 255)
     private String schemaHash; // Hash da estrutura DDL para busca rápida
+
+    @Column(name = "context_hash", nullable = false, length = 255)
+    private String contextHash;
 
     @Column(name = "suggested_improvement", columnDefinition = "TEXT", nullable = false)
     private String suggestedImprovement; // O script/sugestão gerada pela IA
@@ -24,8 +27,12 @@ public class SemanticCache {
     private LocalDateTime createdAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id")
+    @JoinColumn(name = "tenant_id", nullable = false)
     private Tenant tenant;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "database_connection_id", nullable = false)
+    private DatabaseConnection databaseConnection;
 
     @PrePersist
     protected void onCreate() {
@@ -38,6 +45,7 @@ public class SemanticCache {
 
     public SemanticCache(String schemaHash, String suggestedImprovement, String aiProvider) {
         this.schemaHash = schemaHash;
+        this.contextHash = schemaHash;
         this.suggestedImprovement = suggestedImprovement;
         this.aiProvider = aiProvider;
     }
@@ -57,6 +65,14 @@ public class SemanticCache {
 
     public void setSchemaHash(String schemaHash) {
         this.schemaHash = schemaHash;
+    }
+
+    public String getContextHash() {
+        return contextHash;
+    }
+
+    public void setContextHash(String contextHash) {
+        this.contextHash = contextHash;
     }
 
     public String getSuggestedImprovement() {
@@ -85,4 +101,12 @@ public class SemanticCache {
 
     public Tenant getTenant() { return tenant; }
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
+
+    public DatabaseConnection getDatabaseConnection() {
+        return databaseConnection;
+    }
+
+    public void setDatabaseConnection(DatabaseConnection databaseConnection) {
+        this.databaseConnection = databaseConnection;
+    }
 }

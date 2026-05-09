@@ -1,58 +1,65 @@
 package com.dbaagent.api.controllers;
 
 import com.dbaagent.api.dtos.AgentTelemetryRequestDTO;
+import com.dbaagent.api.entities.AgentToken;
+import com.dbaagent.api.entities.DatabaseTelemetrySnapshot;
 import com.dbaagent.api.entities.OptimizationSuggestion;
 import com.dbaagent.api.entities.Tenant;
-import com.dbaagent.api.enums.SuggestionStatus;
-import com.dbaagent.api.repositories.OptimizationSuggestionRepository;
-import com.dbaagent.api.repositories.TenantRepository;
-import com.dbaagent.api.services.GeminiIntegrationService;
+import com.dbaagent.api.services.DatabaseTelemetrySnapshotService;
+import com.dbaagent.api.services.OptimizationAnalysisService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/agent/telemetry")
 public class AgentTelemetryController {
 
-    private final GeminiIntegrationService geminiIntegrationService;
-    private final OptimizationSuggestionRepository repository;
-    private final TenantRepository tenantRepository;
+    private final OptimizationAnalysisService optimizationAnalysisService;
+    private final DatabaseTelemetrySnapshotService snapshotService;
 
-    public AgentTelemetryController(GeminiIntegrationService geminiIntegrationService, 
-                                    OptimizationSuggestionRepository repository,
-                                    TenantRepository tenantRepository) {
-        this.geminiIntegrationService = geminiIntegrationService;
-        this.repository = repository;
-        this.tenantRepository = tenantRepository;
+    public AgentTelemetryController(
+            OptimizationAnalysisService optimizationAnalysisService,
+            DatabaseTelemetrySnapshotService snapshotService) {
+        this.optimizationAnalysisService = optimizationAnalysisService;
+        this.snapshotService = snapshotService;
     }
 
     @PostMapping
-    public ResponseEntity<String> receiveTelemetry(@RequestBody AgentTelemetryRequestDTO telemetry) {
-        // Em produção, o Tenant virá do AgentToken validado no AgentAuthenticationFilter.
-        // Como fallback momentâneo, pegamos o Tenant base (Horizon AJ) para não quebrar a inserção.
-        Tenant tenant = tenantRepository.findAll().stream().findFirst()
-            .orElseThrow(() -> new RuntimeException("Nenhum Tenant configurado no sistema."));
+    public ResponseEntity<String> receiveTelemetry(@Valid @RequestBody AgentTelemetryRequestDTO telemetry) {
+        AgentToken agentToken = requireAgentToken();
+        Tenant tenant = agentToken.getTenant();
 
-        // Sua lógica original de processamento de IA entra aqui.
-        // Exemplo: AiAnalysisResultDTO result = geminiIntegrationService.analyze(telemetry);
+        DatabaseTelemetrySnapshot snapshot = snapshotService.persistSnapshot(
+                tenant,
+                agentToken.getDatabaseConnection(),
+                telemetry);
 
-        String upScript = "-- Script gerado pelo Linter/IA";
-        String downScript = "-- Rollback gerado pelo Linter/IA";
-        String suggestionText = "Análise processada a partir da telemetria do Agente.";
+        OptimizationSuggestion saved = optimizationAnalysisService.analyzeAndPersistFromSnapshot(
+                tenant,
+                agentToken.getDatabaseConnection(),
+                snapshot.getSchemaDdl(),
+                snapshot.getDmvStats(),
+                snapshot.getWaitStats(),
+                snapshot.getTopQueries(),
+                snapshot.getExecutionPlans(),
+                snapshot.getIndexStats(),
+                snapshot.getDbEngine(),
+                null);
 
-        // CORREÇÃO: Uso do Builder injetando o Tenant e os campos da arquitetura
-        OptimizationSuggestion suggestion = OptimizationSuggestion.builder()
-                .tenant(tenant)
-                .databaseName("db_cliente") // Extraia do seu 'telemetry' DTO
-                .tableName("tb_lenta")      // Extraia do seu 'telemetry' DTO
-                .suggestionText(suggestionText)
-                .upScript(upScript)
-                .downScript(downScript)
-                .status(SuggestionStatus.PENDING)
-                .build();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body("Telemetria processada. Sugestão id=" + saved.getId() + " status=PENDING.");
+    }
 
-        repository.save(suggestion);
-
-        return ResponseEntity.ok("Telemetria processada e sugestão salva com status PENDING.");
+    private static AgentToken requireAgentToken() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof AgentToken)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Agente não autenticado.");
+        }
+        return (AgentToken) auth.getPrincipal();
     }
 }

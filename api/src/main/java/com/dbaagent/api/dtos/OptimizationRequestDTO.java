@@ -1,6 +1,7 @@
 package com.dbaagent.api.dtos;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public class OptimizationRequestDTO {
 
@@ -10,6 +11,8 @@ public class OptimizationRequestDTO {
     private String dmvStats;
     private String aiModel = "gemini-2.5-flash"; 
     private String dbEngine = "SQL Server";
+    @NotNull(message = "databaseConnectionId é obrigatório")
+    private Long databaseConnectionId;
 
     public OptimizationRequestDTO() {}
 
@@ -32,5 +35,13 @@ public class OptimizationRequestDTO {
         if (dbEngine != null && !dbEngine.trim().isEmpty()) {
             this.dbEngine = dbEngine;
         }
+    }
+
+    public Long getDatabaseConnectionId() {
+        return databaseConnectionId;
+    }
+
+    public void setDatabaseConnectionId(Long databaseConnectionId) {
+        this.databaseConnectionId = databaseConnectionId;
     }
 }

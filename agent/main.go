@@ -1,11 +1,27 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
+
+type AgentTarget struct {
+	Name         string `json:"name"`
+	DbEngine     string `json:"dbEngine"`
+	DbConnString string `json:"dbConnString"`
+	AgentToken   string `json:"agentToken"`
+}
+
+func limitPayload(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "\n-- truncated by agent --"
+}
 
 func main() {
 	fmt.Println("=======================================================")
@@ -18,83 +34,134 @@ func main() {
 		apiURL = "http://localhost:8080/api/v1"
 	}
 
-	agentToken := os.Getenv("X_AGENT_TOKEN")
-	if agentToken == "" {
-		log.Println("⚠️ AVISO: Variável X_AGENT_TOKEN não encontrada.")
-	}
-
-	dbConnString := os.Getenv("DB_CONN_STRING")
-	if dbConnString == "" {
-		log.Println("⚠️ AVISO: DB_CONN_STRING não configurada. O agente enviará dados de MOCK.")
+	targets := loadTargetsFromEnv()
+	if len(targets) == 0 {
+		log.Println("❌ Nenhum alvo de banco configurado. Defina DBA_TARGETS_JSON ou X_AGENT_TOKEN.")
+		return
 	}
 
 	intervalo := 10 * time.Second
 	ticker := time.NewTicker(intervalo)
 	defer ticker.Stop()
 
-	log.Printf("⏳ Agendador configurado. Ciclo a cada %v...\n", intervalo)
+	log.Printf("⏳ Agendador configurado. Ciclo a cada %v com %d alvo(s).\n", intervalo, len(targets))
 
-	executarCiclo(apiURL, agentToken, dbConnString)
+	executarCiclo(apiURL, targets)
 
 	for range ticker.C {
-		executarCiclo(apiURL, agentToken, dbConnString)
+		executarCiclo(apiURL, targets)
 	}
 }
 
-func executarCiclo(apiURL string, agentToken string, dbConnString string) {
+func loadTargetsFromEnv() []AgentTarget {
+	jsonConfig := strings.TrimSpace(os.Getenv("DBA_TARGETS_JSON"))
+	if jsonConfig != "" {
+		var targets []AgentTarget
+		if err := json.Unmarshal([]byte(jsonConfig), &targets); err != nil {
+			log.Printf("❌ DBA_TARGETS_JSON inválido: %v\n", err)
+			return nil
+		}
+		valid := make([]AgentTarget, 0, len(targets))
+		for _, t := range targets {
+			if strings.TrimSpace(t.AgentToken) == "" {
+				log.Printf("⚠️ Alvo '%s' ignorado: agentToken ausente.\n", t.Name)
+				continue
+			}
+			if strings.TrimSpace(t.DbEngine) == "" {
+				t.DbEngine = "SQL Server"
+			}
+			valid = append(valid, t)
+		}
+		return valid
+	}
+
+	legacyToken := strings.TrimSpace(os.Getenv("X_AGENT_TOKEN"))
+	if legacyToken == "" {
+		return nil
+	}
+	legacyConn := strings.TrimSpace(os.Getenv("DB_CONN_STRING"))
+	legacyEngine := strings.TrimSpace(os.Getenv("DB_ENGINE"))
+	if legacyEngine == "" {
+		legacyEngine = "SQL Server"
+	}
+	return []AgentTarget{
+		{
+			Name:         "default",
+			DbEngine:     legacyEngine,
+			DbConnString: legacyConn,
+			AgentToken:   legacyToken,
+		},
+	}
+}
+
+func executarCiclo(apiURL string, targets []AgentTarget) {
 	log.Println("🔄 Iniciando ciclo de trabalho...")
 
-	var ddl, dmv string
-	
-	if dbConnString != "" {
-		db, err := ConnectDB(dbConnString)
-		if err != nil {
-			log.Printf("❌ Erro ao conectar no SQL Server: %v\n", err)
-			return
+	for _, target := range targets {
+		log.Printf("🧭 Alvo: %s (%s)\n", target.Name, target.DbEngine)
+		var ddl, dmv string
+		var waits, topq, idxstats, plans string
+		if target.DbConnString != "" && strings.EqualFold(target.DbEngine, "SQL Server") {
+			db, err := ConnectDB(target.DbConnString)
+			if err != nil {
+				log.Printf("❌ Erro ao conectar no alvo '%s': %v\n", target.Name, err)
+				continue
+			}
+			ddl, _ = ExtractSchema(db)
+			dmv, _ = ExtractDMV(db)
+			waits, _ = ExtractWaitStats(db)
+			topq, _ = ExtractTopQueries(db)
+			idxstats, _ = ExtractIndexStats(db)
+			plans, _ = ExtractExecutionPlans(db)
+			db.Close()
+			log.Printf("📦 Telemetria extraída do alvo '%s'.\n", target.Name)
+		} else {
+			ddl = "CREATE TABLE faturamento_vendas (id INT PRIMARY KEY, valor DECIMAL, cliente_id INT, data_venda TIMESTAMP, status char(2));"
+			dmv = "Modo fallback/mock para alvo sem conexão SQL Server configurada."
+			waits = ""
+			topq = ""
+			idxstats = ""
+			plans = ""
+			if !strings.EqualFold(target.DbEngine, "SQL Server") {
+				log.Printf("⚠️ Engine %s ainda sem extractor nativo. Enviando mock para '%s'.\n", target.DbEngine, target.Name)
+			}
 		}
-		defer db.Close()
 
-		ddl, _ = ExtractSchema(db)
-		dmv, _ = ExtractDMV(db)
-		log.Println("📦 Dados reais extraídos do SQL Server via DDL e DMVs.")
-	} else {
-		ddl = "CREATE TABLE faturamento_vendas (id INT PRIMARY KEY, valor DECIMAL, cliente_id INT, data_venda TIMESTAMP, status char(2));"
-		dmv = "Filtros por 'data_venda' e JOIN com a tabela de clientes estão custando 5 segundos na query."
-	}
+		telemetry := TelemetryRequest{
+			DbEngine:       target.DbEngine,
+			SchemaDdl:      limitPayload(ddl, 12000),
+			DmvStats:       limitPayload(dmv, 12000),
+			WaitStats:      limitPayload(waits, 12000),
+			TopQueries:     limitPayload(topq, 20000),
+			IndexStats:     limitPayload(idxstats, 12000),
+			ExecutionPlans: limitPayload(plans, 60000),
+		}
+		SendTelemetry(apiURL, target.AgentToken, telemetry)
 
-	telemetry := TelemetryRequest{
-		DbEngine:  "SQL Server",
-		SchemaDdl: ddl,
-		DmvStats:  dmv,
-	}
-
-	SendTelemetry(apiURL, agentToken, telemetry)
-
-	log.Println("🔍 Buscando tarefas pendentes (aprovadas)...")
-	tasks := FetchPendingTasks(apiURL, agentToken)
-
-	if len(tasks) > 0 {
+		tasks := FetchPendingTasks(apiURL, target.AgentToken)
 		for _, task := range tasks {
-			log.Printf("⚙️  Processando Tarefa #%d...\n", task.ID)
-			
-			if dbConnString != "" {
-				db, _ := ConnectDB(dbConnString)
-				err := ExecuteScript(db, task.UpScript)
+			log.Printf("⚙️ Processando Tarefa #%d para '%s'...\n", task.ID, target.Name)
+			if task.DatabaseName != "" && !strings.EqualFold(task.DatabaseName, target.Name) {
+				log.Printf("ℹ️ Tarefa vinculada ao banco '%s' (alvo local: '%s').\n", task.DatabaseName, target.Name)
+			}
+			if target.DbConnString != "" && strings.EqualFold(target.DbEngine, "SQL Server") {
+				db, err := ConnectDB(target.DbConnString)
 				if err != nil {
-					log.Printf("❌ Erro ao executar UpScript da Tarefa #%d: %v\n", task.ID, err)
-					db.Close()
+					log.Printf("❌ Falha ao conectar para executar tarefa %d: %v\n", task.ID, err)
 					continue
 				}
+				err = ExecuteScript(db, task.UpScript)
 				db.Close()
+				if err != nil {
+					log.Printf("❌ Erro ao executar UpScript da Tarefa #%d: %v\n", task.ID, err)
+					continue
+				}
 				log.Println("📜 Script de Deploy executado com sucesso no banco local!")
 			} else {
-				log.Println("⚠️  MOCK MODE: Simulação de execução do script (banco não conectado).")
+				log.Println("⚠️ MOCK MODE: Simulação de execução do script.")
 			}
-
-			MarkTaskCompleted(apiURL, agentToken, task.ID)
+			MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
 		}
-	} else {
-		log.Println("📭 Nenhuma tarefa aprovada para executar no momento.")
 	}
 
 	log.Println("✅ Ciclo finalizado. Voltando a dormir.")

@@ -12,19 +12,25 @@ import (
 
 // DTO de Envio de Telemetria
 type TelemetryRequest struct {
-	DbEngine  string `json:"dbEngine"`
-	SchemaDdl string `json:"schemaDdl"`
-	DmvStats  string `json:"dmvStats"`
+	DbEngine        string `json:"dbEngine"`
+	SchemaDdl       string `json:"schemaDdl"`
+	DmvStats        string `json:"dmvStats"`
+	WaitStats       string `json:"waitStats,omitempty"`
+	TopQueries      string `json:"topQueries,omitempty"`
+	ExecutionPlans  string `json:"executionPlans,omitempty"`
+	IndexStats      string `json:"indexStats,omitempty"`
 }
 
 // DTO de Recebimento de Tarefa (Aprovada)
 type TaskResponse struct {
-	ID         int    `json:"id"`
-	SchemaHash string `json:"schemaHash"`
-	Diagnosis  string `json:"diagnosis"`
-	UpScript   string `json:"upScript"`
-	DownScript string `json:"downScript"`
-	Status     string `json:"status"`
+	ID                   int64  `json:"id"`
+	DatabaseConnectionID int64  `json:"databaseConnectionId"`
+	DatabaseName         string `json:"databaseName"`
+	SchemaHash           string `json:"schemaHash"`
+	Diagnosis            string `json:"diagnosis"`
+	UpScript             string `json:"upScript"`
+	DownScript           string `json:"downScript"`
+	Status               string `json:"status"`
 }
 
 // Cliente HTTP configurado com timeout
@@ -102,7 +108,7 @@ func FetchPendingTasks(apiURL string, token string) []TaskResponse {
 }
 
 // Avisa a API que o script foi executado com sucesso no banco do cliente
-func MarkTaskCompleted(apiURL string, token string, taskID int) {
+func MarkTaskCompleted(apiURL string, token string, taskID int64) {
 	url := fmt.Sprintf("%s/agent/tasks/%d/complete", apiURL, taskID)
 
 	req, err := http.NewRequest("POST", url, nil)

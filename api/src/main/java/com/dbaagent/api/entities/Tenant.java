@@ -1,5 +1,6 @@
 package com.dbaagent.api.entities;
 
+import com.dbaagent.api.security.SensitiveStringCryptoConverter;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -15,6 +16,7 @@ public class Tenant {
     private String name;
 
     @Column(name = "gemini_api_key", length = 500)
+    @Convert(converter = SensitiveStringCryptoConverter.class)
     private String geminiApiKey;
 
     @Column(name = "is_active", nullable = false)

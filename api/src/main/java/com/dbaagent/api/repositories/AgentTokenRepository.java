@@ -9,7 +9,13 @@ import java.util.Optional;
 @Repository
 public interface AgentTokenRepository extends JpaRepository<AgentToken, Long> {
     
-    // JOIN FETCH para evitar o erro de LazyLoad quando o filtro validar o Agente
-    @Query("SELECT a FROM AgentToken a JOIN FETCH a.tenant WHERE a.token = :token AND a.isActive = true")
+    @Query("""
+            SELECT a
+            FROM AgentToken a
+            JOIN FETCH a.tenant
+            JOIN FETCH a.databaseConnection
+            WHERE a.token = :token
+              AND a.isActive = true
+            """)
     Optional<AgentToken> findByTokenWithTenant(String token);
 }

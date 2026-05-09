@@ -13,6 +13,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class SuggestionResponseDTO {
     private Long id;
+    private Long databaseConnectionId;
+    private String databaseConnectionName;
     private String databaseName;
     private String tableName;
     private String suggestionText;

@@ -10,6 +10,12 @@ public class AgentTelemetryRequestDTO {
     private String dmvStats;
     private String dbEngine = "SQL Server";
 
+    // Contexto avançado (opcional): quanto mais, melhor a precisão.
+    private String waitStats;
+    private String topQueries;
+    private String executionPlans;
+    private String indexStats;
+
     public AgentTelemetryRequestDTO() {}
 
     // Getters e Setters
@@ -24,5 +30,37 @@ public class AgentTelemetryRequestDTO {
         if (dbEngine != null && !dbEngine.trim().isEmpty()) {
             this.dbEngine = dbEngine;
         }
+    }
+
+    public String getWaitStats() {
+        return waitStats;
+    }
+
+    public void setWaitStats(String waitStats) {
+        this.waitStats = waitStats;
+    }
+
+    public String getTopQueries() {
+        return topQueries;
+    }
+
+    public void setTopQueries(String topQueries) {
+        this.topQueries = topQueries;
+    }
+
+    public String getExecutionPlans() {
+        return executionPlans;
+    }
+
+    public void setExecutionPlans(String executionPlans) {
+        this.executionPlans = executionPlans;
+    }
+
+    public String getIndexStats() {
+        return indexStats;
+    }
+
+    public void setIndexStats(String indexStats) {
+        this.indexStats = indexStats;
     }
 }

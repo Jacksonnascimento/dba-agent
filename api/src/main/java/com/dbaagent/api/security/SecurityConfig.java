@@ -17,10 +17,15 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AgentAuthenticationFilter agentAuthFilter;
+    private final SimpleRateLimitFilter rateLimitFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, AgentAuthenticationFilter agentAuthFilter) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthFilter,
+            AgentAuthenticationFilter agentAuthFilter,
+            SimpleRateLimitFilter rateLimitFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.agentAuthFilter = agentAuthFilter;
+        this.rateLimitFilter = rateLimitFilter;
     }
 
     @Bean
@@ -41,7 +46,8 @@ public class SecurityConfig {
                 // Qualquer outra rota exige estar autenticado (ROLE_ADMIN ou ROLE_CLIENT)
                 .anyRequest().authenticated()
             )
-            // Ordem dos filtros: primeiro verifica se é requisição de Agente, depois verifica se é requisição Web (JWT)
+            // Ordem dos filtros: rate limit -> agent auth -> jwt auth
+            .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(agentAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(jwtAuthFilter, AgentAuthenticationFilter.class);
 

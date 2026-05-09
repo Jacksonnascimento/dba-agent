@@ -28,7 +28,8 @@ public class AgentTokenController {
 
         // O usuário logado já tem o Tenant dele "pendurado" na memória (graças ao JOIN FETCH)
         AgentToken newToken = agentTokenService.generateTokenForTenant(
-                request.getDescription(), 
+                request.getDescription(),
+                request.getDatabaseConnectionId(),
                 loggedUser.getTenant()
         );
 
@@ -37,6 +38,7 @@ public class AgentTokenController {
                 "id", newToken.getId(),
                 "token", newToken.getToken(),
                 "description", newToken.getDescription(),
+                "databaseConnectionId", newToken.getDatabaseConnection().getId(),
                 "createdAt", newToken.getCreatedAt()
         ));
     }
