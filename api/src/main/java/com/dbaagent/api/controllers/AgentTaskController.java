@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -32,6 +33,7 @@ public class AgentTaskController {
     }
 
     @GetMapping
+    @Transactional(readOnly = true) // Mantém a sessão aberta para evitar o LazyInitializationException
     public ResponseEntity<List<AgentTaskResponseDTO>> listApprovedTasks() {
         AgentToken agentToken = requireAgentToken();
         Tenant tenant = agentToken.getTenant();
@@ -39,14 +41,17 @@ public class AgentTaskController {
                 tenant,
                 agentToken.getDatabaseConnection(),
                 SuggestionStatus.APPROVED);
+        
         if (approved.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         }
+        
         List<AgentTaskResponseDTO> body = approved.stream().map(this::toAgentTaskDto).toList();
         return ResponseEntity.ok(body);
     }
 
     @PostMapping("/{id}/complete")
+    @Transactional // Garante consistência entre atualizar a sugestão e gravar a auditoria
     public ResponseEntity<String> markTaskAsComplete(@PathVariable Long id) {
         AgentToken agentToken = requireAgentToken();
         Tenant tenant = agentToken.getTenant();
@@ -68,6 +73,7 @@ public class AgentTaskController {
         suggestion.setAppliedAt(LocalDateTime.now());
         suggestion.setStatus(SuggestionStatus.EXECUTED);
         repository.save(suggestion);
+        
         auditLogService.log(
                 suggestion,
                 "EXECUTED",

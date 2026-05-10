@@ -32,6 +32,9 @@ public class DatabaseConnection {
     @Convert(converter = SensitiveStringCryptoConverter.class)
     private String connectionUri;
 
+    @Column(name = "snapshot_interval_minutes", nullable = false)
+    private Integer snapshotIntervalMinutes = 1440; // Default: 24h
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
@@ -78,12 +81,20 @@ public class DatabaseConnection {
         this.connectionUri = connectionUri;
     }
 
+    public Integer getSnapshotIntervalMinutes() {
+        return snapshotIntervalMinutes;
+    }
+
+    public void setSnapshotIntervalMinutes(Integer snapshotIntervalMinutes) {
+        this.snapshotIntervalMinutes = snapshotIntervalMinutes;
+    }
+
     public Boolean getActive() {
         return isActive;
     }
 
     public void setActive(Boolean active) {
-        isActive = active;
+        this.isActive = active;
     }
 
     public LocalDateTime getCreatedAt() {

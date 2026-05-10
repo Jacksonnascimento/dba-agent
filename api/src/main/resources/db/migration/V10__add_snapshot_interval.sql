@@ -1,0 +1,1 @@
+ALTER TABLE database_connections ADD COLUMN snapshot_interval_minutes INT NOT NULL DEFAULT 1440;

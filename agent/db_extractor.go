@@ -116,7 +116,7 @@ func ExtractSchema(db *sql.DB) (string, error) {
 	return ddl.String(), nil
 }
 
-// ExtractDMV lê estatísticas dinâmicas (índices ausentes no SQL Server)
+// ExtractDMV lê estatísticas dinâmicas (índices ausentes no SQL Server) isoladas para o banco atual
 func ExtractDMV(db *sql.DB) (string, error) {
 	query := `
 		SELECT TOP 5
@@ -125,6 +125,7 @@ func ExtractDMV(db *sql.DB) (string, error) {
 		FROM sys.dm_db_missing_index_groups mig
 		INNER JOIN sys.dm_db_missing_index_group_stats migs ON migs.group_handle = mig.index_group_handle
 		INNER JOIN sys.dm_db_missing_index_details mid ON mig.index_handle = mid.index_handle
+		WHERE mid.database_id = DB_ID()
 		ORDER BY migs.avg_user_impact DESC;
 	`
 	rows, err := db.Query(query)
@@ -146,13 +147,13 @@ func ExtractDMV(db *sql.DB) (string, error) {
 	}
 	
 	if !hasData {
-		return "Nenhum índice ausente crítico detectado nas DMVs.", nil
+		return "Nenhum índice ausente crítico detectado nas DMVs para este banco.", nil
 	}
 
 	return dmv.String(), nil
 }
 
-// ExtractWaitStats traz um resumo de waits do SQL Server.
+// ExtractWaitStats traz um resumo de waits do SQL Server (Nível de Instância).
 func ExtractWaitStats(db *sql.DB) (string, error) {
 	query := `
 		SELECT TOP 10
@@ -186,7 +187,7 @@ func ExtractWaitStats(db *sql.DB) (string, error) {
 	return b.String(), nil
 }
 
-// ExtractTopQueries traz um resumo das queries mais caras (CPU / Duration).
+// ExtractTopQueries traz um resumo das queries mais caras isoladas para o banco atual.
 func ExtractTopQueries(db *sql.DB) (string, error) {
 	query := `
 		SELECT TOP 10
@@ -199,6 +200,7 @@ func ExtractTopQueries(db *sql.DB) (string, error) {
 					ELSE qs.statement_end_offset END - qs.statement_start_offset)/2 + 1) AS statement_text
 		FROM sys.dm_exec_query_stats qs
 		CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+		WHERE st.dbid = DB_ID()
 		ORDER BY qs.total_elapsed_time DESC;
 	`
 	rows, err := db.Query(query)
@@ -223,12 +225,12 @@ func ExtractTopQueries(db *sql.DB) (string, error) {
 		}
 	}
 	if !has {
-		return "Sem dados de query stats.", nil
+		return "Sem dados de query stats para este banco.", nil
 	}
 	return b.String(), nil
 }
 
-// ExtractIndexStats traz um resumo de fragmentação e tamanho.
+// ExtractIndexStats traz um resumo de fragmentação e tamanho. O DB_ID() já garante o isolamento.
 func ExtractIndexStats(db *sql.DB) (string, error) {
 	query := `
 		SELECT TOP 10
@@ -266,13 +268,15 @@ func ExtractIndexStats(db *sql.DB) (string, error) {
 	return b.String(), nil
 }
 
-// ExtractExecutionPlans retorna os planos XML das queries mais caras.
+// ExtractExecutionPlans retorna os planos XML das queries mais caras isoladas para o banco atual.
 func ExtractExecutionPlans(db *sql.DB) (string, error) {
 	query := `
 		SELECT TOP 5
 			qp.query_plan
 		FROM sys.dm_exec_query_stats qs
 		CROSS APPLY sys.dm_exec_query_plan(qs.plan_handle) qp
+		CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+		WHERE st.dbid = DB_ID()
 		ORDER BY qs.total_elapsed_time DESC;
 	`
 	rows, err := db.Query(query)
@@ -297,7 +301,7 @@ func ExtractExecutionPlans(db *sql.DB) (string, error) {
 		}
 	}
 	if !has {
-		return "Sem planos disponíveis via DMV.", nil
+		return "Sem planos disponíveis via DMV para este banco.", nil
 	}
 	return b.String(), nil
 }
