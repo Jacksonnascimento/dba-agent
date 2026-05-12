@@ -116,11 +116,21 @@ func main() {
 
 // Inicia o ciclo de vida completo do agente para um token específico
 func iniciarCicloAgenteParaToken(apiURL string, agentToken string) {
-	log.Printf("🔐 [Token: %s...] Buscando credenciais e configuração de forma segura na API Central...", agentToken[:8])
-	apiConfig, err := FetchConfigFromAPI(apiURL, agentToken)
-	if err != nil {
-		log.Printf("❌ ERRO CRÍTICO ao buscar configurações para o token %s...: %v\n", agentToken[:8], err)
-		return // Encerra a goroutine deste token, mas os outros continuam rodando
+	var apiConfig *AgentConfigAPI
+	var err error
+
+	// LOOP DE RESILIÊNCIA: Tenta conectar na API até obter sucesso
+	for {
+		log.Printf("🔐 [Token: %s...] Buscando credenciais e configuração na API Central...", agentToken[:8])
+		apiConfig, err = FetchConfigFromAPI(apiURL, agentToken)
+
+		if err == nil {
+			log.Printf("✅ [Token: %s...] Configuração carregada com sucesso!", agentToken[:8])
+			break
+		}
+
+		log.Printf("⚠️ [Token: %s...] API indisponível ou erro na busca. Tentando novamente em 15s... (Erro: %v)\n", agentToken[:8], err)
+		time.Sleep(15 * time.Second)
 	}
 
 	// Montando o Alvo dinâmico a partir do banco

@@ -1,6 +1,7 @@
 package com.dbaagent.api.dtos;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 public class DatabaseConnectionCreateRequestDTO {
 
@@ -10,30 +11,40 @@ public class DatabaseConnectionCreateRequestDTO {
     @NotBlank(message = "Engine é obrigatória")
     private String dbEngine;
 
-    @NotBlank(message = "Connection URI é obrigatória")
-    private String connectionUri;
+    @NotBlank(message = "Host/IP é obrigatório")
+    private String host;
 
-    public String getName() {
-        return name;
-    }
+    @NotNull(message = "Porta é obrigatória")
+    private Integer port;
 
-    public void setName(String name) {
-        this.name = name;
-    }
+    @NotBlank(message = "Nome do database é obrigatório")
+    private String database;
 
-    public String getDbEngine() {
-        return dbEngine;
-    }
+    @NotBlank(message = "Usuário é obrigatório")
+    private String username;
 
-    public void setDbEngine(String dbEngine) {
-        this.dbEngine = dbEngine;
-    }
+    @NotBlank(message = "Senha é obrigatória")
+    private String password;
 
-    public String getConnectionUri() {
-        return connectionUri;
-    }
+    // Getters and Setters
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
-    public void setConnectionUri(String connectionUri) {
-        this.connectionUri = connectionUri;
-    }
+    public String getDbEngine() { return dbEngine; }
+    public void setDbEngine(String dbEngine) { this.dbEngine = dbEngine; }
+
+    public String getHost() { return host; }
+    public void setHost(String host) { this.host = host; }
+
+    public Integer getPort() { return port; }
+    public void setPort(Integer port) { this.port = port; }
+
+    public String getDatabase() { return database; }
+    public void setDatabase(String database) { this.database = database; }
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
 }

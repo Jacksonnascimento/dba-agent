@@ -9,9 +9,15 @@ export default function DatabasesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Novos states separados para conexão
   const [name, setName] = useState("");
   const [dbEngine, setDbEngine] = useState("SQL Server");
-  const [connectionUri, setConnectionUri] = useState("");
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState<number | "">(1433);
+  const [database, setDatabase] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  
   const [creating, setCreating] = useState(false);
 
   const [tokenDbId, setTokenDbId] = useState<number | null>(null);
@@ -23,6 +29,12 @@ export default function DatabasesPage() {
     () => items.filter((d) => d.active),
     [items]
   );
+
+  // Sugestão de porta automática baseada na engine
+  useEffect(() => {
+    if (dbEngine === "SQL Server") setPort(1433);
+    if (dbEngine === "PostgreSQL") setPort(5432);
+  }, [dbEngine]);
 
   async function refresh() {
     setLoading(true);
@@ -48,8 +60,7 @@ export default function DatabasesPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Bancos</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Cadastre múltiplos bancos por tenant. Cada banco pode ter 1+ agentes
-          via token.
+          Cadastre múltiplos bancos por tenant. O sistema cuidará da formatação e criptografia dos dados de acesso.
         </p>
       </div>
 
@@ -60,20 +71,25 @@ export default function DatabasesPage() {
       ) : null}
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/30 p-4">
-        <div className="text-sm font-medium">Novo banco</div>
+        <div className="text-sm font-medium">Novo banco de dados</div>
+        
         <form
-          className="mt-3 grid gap-3 sm:grid-cols-2"
+          className="mt-4 grid gap-4 sm:grid-cols-4"
           onSubmit={async (e) => {
             e.preventDefault();
             setCreating(true);
             setError(null);
             try {
+              // Envia o payload com os campos quebrados para o backend resolver
               await apiFetch<DatabaseConnection>("/database-connections", {
                 method: "POST",
-                body: JSON.stringify({ name, dbEngine, connectionUri }),
+                body: JSON.stringify({ 
+                    name, dbEngine, host, port: Number(port), database, username, password 
+                }),
               });
-              setName("");
-              setConnectionUri("");
+              
+              // Limpa form após o sucesso
+              setName(""); setHost(""); setDatabase(""); setUsername(""); setPassword("");
               await refresh();
             } catch (e: any) {
               setError(e?.message ?? "Falha ao criar banco");
@@ -82,59 +98,93 @@ export default function DatabasesPage() {
             }
           }}
         >
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-400">Nome</label>
+          {/* Linha 1: Nome e Engine */}
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-xs text-zinc-400">Apelido do Banco</label>
             <input
               className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ex: sqlserver-prod-1"
-              required
+              value={name} onChange={(e) => setName(e.target.value)}
+              placeholder="ex: Produção ERP" required
             />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 sm:col-span-2">
             <label className="text-xs text-zinc-400">Engine</label>
             <select
               className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
-              value={dbEngine}
-              onChange={(e) => setDbEngine(e.target.value)}
+              value={dbEngine} onChange={(e) => setDbEngine(e.target.value)}
             >
               <option>SQL Server</option>
               <option>PostgreSQL</option>
             </select>
           </div>
-          <div className="space-y-1 sm:col-span-2">
-            <label className="text-xs text-zinc-400">
-              Connection URI (armazenada criptografada no backend)
-            </label>
+
+          {/* Linha 2: Host e Porta */}
+          <div className="space-y-1 sm:col-span-3">
+            <label className="text-xs text-zinc-400">Host / IP</label>
             <input
               className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
-              value={connectionUri}
-              onChange={(e) => setConnectionUri(e.target.value)}
-              placeholder="ex: sqlserver://user:pass@host:1433?database=ERP"
-              required
+              value={host} onChange={(e) => setHost(e.target.value)}
+              placeholder="ex: 10.158.0.119 ou localhost" required
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-1">
+            <label className="text-xs text-zinc-400">Porta</label>
+            <input
+              type="number"
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
+              value={port} onChange={(e) => setPort(e.target.value === "" ? "" : Number(e.target.value))}
+              placeholder="ex: 1433" required
             />
           </div>
 
-          <div className="sm:col-span-2 flex gap-2">
+          {/* Linha 3: Database, User, Pass */}
+          <div className="space-y-1 sm:col-span-4">
+            <label className="text-xs text-zinc-400">Nome do Banco de Dados (Database)</label>
+            <input
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
+              value={database} onChange={(e) => setDatabase(e.target.value)}
+              placeholder="ex: FPG_WEB_PM_CAMACARI" required
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-xs text-zinc-400">Usuário</label>
+            <input
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
+              value={username} onChange={(e) => setUsername(e.target.value)}
+              placeholder="ex: admin" required
+            />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-xs text-zinc-400">Senha (permitido uso de @, #, !)</label>
+            <input
+              type="password"
+              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
+              value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="Sua senha segura" required
+            />
+          </div>
+
+          <div className="sm:col-span-4 flex gap-2 mt-2">
             <button
               className="rounded-lg bg-zinc-50 text-zinc-900 px-4 py-2 text-sm font-medium hover:bg-white disabled:opacity-60"
-              disabled={creating}
-              type="submit"
+              disabled={creating} type="submit"
             >
-              {creating ? "Criando..." : "Criar"}
+              {creating ? "Criando..." : "Salvar Banco"}
             </button>
             <button
               type="button"
               className="rounded-lg border border-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-950/40"
-              onClick={refresh}
-              disabled={loading}
+              onClick={refresh} disabled={loading}
             >
               Recarregar
             </button>
           </div>
         </form>
       </section>
+
+      {/* ==================================================== */}
+      {/* SECÕES RESTANTES (TABELA DE BANCOS E TOKENS) INTACTAS */}
+      {/* ==================================================== */}
 
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/30 p-4">
         <div className="text-sm font-medium">Bancos cadastrados</div>
@@ -179,8 +229,7 @@ export default function DatabasesPage() {
       <section className="rounded-2xl border border-zinc-800 bg-zinc-950/30 p-4">
         <div className="text-sm font-medium">Token do agente (por banco)</div>
         <p className="mt-1 text-xs text-zinc-400">
-          Gere um token e copie para configurar o worker (`X_AGENT_TOKEN` /
-          `DBA_TARGETS_JSON`).
+          Gere um token e copie para configurar o worker.
         </p>
 
         <form
@@ -264,4 +313,3 @@ export default function DatabasesPage() {
     </div>
   );
 }
-
