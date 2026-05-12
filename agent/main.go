@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/kardianos/service"
 )
 
 type AgentConfigAPI struct {
@@ -26,6 +28,11 @@ type AgentTarget struct {
 	DbEngine     string
 	DbConnString string
 	AgentToken   string
+}
+
+// program representa a estrutura do nosso serviço
+type program struct {
+	quit chan struct{}
 }
 
 func limitPayload(s string, max int) string {
@@ -64,7 +71,22 @@ func FetchConfigFromAPI(apiURL string, token string) (*AgentConfigAPI, error) {
 	return &config, nil
 }
 
-func main() {
+// Start é chamado quando o serviço é iniciado pelo SO
+func (p *program) Start(s service.Service) error {
+	p.quit = make(chan struct{})
+	go p.run()
+	return nil
+}
+
+// Stop é chamado quando o serviço é parado pelo SO
+func (p *program) Stop(s service.Service) error {
+	log.Println("Sinal de parada recebido. Encerrando DBA Agent Worker...")
+	close(p.quit)
+	return nil
+}
+
+// run contém a lógica principal que antes ficava na func main()
+func (p *program) run() {
 	// Carrega as variáveis do arquivo .env local
 	err := godotenv.Load()
 	if err != nil {
@@ -83,7 +105,7 @@ func main() {
 
 	// Agora aceita uma lista separada por vírgulas de tokens no .env
 	agentTokensRaw := os.Getenv("X_AGENT_TOKENS")
-	
+
 	// Fallback para manter compatibilidade com a versão anterior caso o usuário não tenha atualizado o .env
 	if agentTokensRaw == "" {
 		agentTokensRaw = os.Getenv("X_AGENT_TOKEN")
@@ -111,7 +133,42 @@ func main() {
 		}(t)
 	}
 
-	wg.Wait()
+	// Bloqueia a execução aguardando o sinal de parada do serviço
+	<-p.quit
+}
+
+func main() {
+	// Configuração do serviço no Sistema Operacional
+	svcConfig := &service.Config{
+		Name:        "DBAAgentWorker",
+		DisplayName: "DBA Agent Worker",
+		Description: "Serviço de coleta e envio de métricas para o SaaS DBA Agent.",
+	}
+
+	prg := &program{}
+	s, err := service.New(prg, svcConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Verifica se o usuário passou alguma flag no terminal
+	action := flag.String("service", "", "Ações do serviço: install, uninstall, start, stop, restart")
+	flag.Parse()
+
+	if *action != "" {
+		err = service.Control(s, *action)
+		if err != nil {
+			log.Fatalf("Falha ao executar a ação '%s': %v", *action, err)
+		}
+		fmt.Printf("Ação '%s' executada com sucesso no serviço.\n", *action)
+		return
+	}
+
+	// Inicia o programa (como serviço ou no terminal se executado diretamente)
+	err = s.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Inicia o ciclo de vida completo do agente para um token específico
@@ -183,7 +240,7 @@ func iniciarCicloAgenteParaToken(apiURL string, agentToken string) {
 func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 	for _, target := range targets {
 		log.Printf("🔄 [TELEMETRIA - %s] Iniciando extração massiva...", target.Name)
-		
+
 		if target.DbConnString == "" {
 			log.Printf("⚠️ [TELEMETRIA - %s] Alvo ignorado: API não retornou Connection String.\n", target.Name)
 			continue

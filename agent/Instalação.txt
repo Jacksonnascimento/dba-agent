@@ -1,0 +1,6 @@
+.\dba-agent.exe -service start
+
+.\dba-agent.exe -service stop
+.\dba-agent.exe -service uninstall
+
+.\build.ps1
