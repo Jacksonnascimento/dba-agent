@@ -1,0 +1,53 @@
+name: Deploy DBA Agent
+
+on:
+  push:
+    branches: [ main ] # Executa sempre que você enviar para a main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Login no GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Buildx (Para gerar imagem ARM64)
+        uses: docker/setup-buildx-action@v3
+
+      # Build da API
+      - name: Build e Push API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          push: true
+          tags: ghcr.io/${{ github.repository }}-api:latest
+          platforms: linux/arm64
+
+      # Build da Web
+      - name: Build e Push Web
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          push: true
+          tags: ghcr.io/${{ github.repository }}-web:latest
+          platforms: linux/arm64
+
+      # Deploy no Servidor Hetzner
+      - name: SSH Deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST_IP }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/dba-agent
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
