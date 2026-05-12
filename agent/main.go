@@ -73,7 +73,7 @@ func main() {
 
 	fmt.Println("=======================================================")
 	fmt.Println("🚀 DBA Agent Worker iniciado com sucesso (Golang).")
-	fmt.Println("🛡️  Modo Operacional: BYOK / Nuvem Gerenciada")
+	fmt.Println("🛡️  Modo Operacional: BYOK / Nuvem Gerenciada (Multi-Token)")
 	fmt.Println("=======================================================")
 
 	apiURL := os.Getenv("API_URL")
@@ -81,15 +81,46 @@ func main() {
 		apiURL = "http://localhost:8080/api/v1"
 	}
 
-	agentToken := strings.TrimSpace(os.Getenv("X_AGENT_TOKEN"))
-	if agentToken == "" {
-		log.Fatalln("❌ ERRO FATAL: X_AGENT_TOKEN não encontrado no .env ou nas variáveis de ambiente.")
+	// Agora aceita uma lista separada por vírgulas de tokens no .env
+	agentTokensRaw := os.Getenv("X_AGENT_TOKENS")
+	
+	// Fallback para manter compatibilidade com a versão anterior caso o usuário não tenha atualizado o .env
+	if agentTokensRaw == "" {
+		agentTokensRaw = os.Getenv("X_AGENT_TOKEN")
 	}
 
-	log.Println("🔐 Buscando credenciais e configuração de forma segura na API Central...")
+	if strings.TrimSpace(agentTokensRaw) == "" {
+		log.Fatalln("❌ ERRO FATAL: X_AGENT_TOKENS ou X_AGENT_TOKEN não encontrado no .env ou nas variáveis de ambiente.")
+	}
+
+	tokens := strings.Split(agentTokensRaw, ",")
+	var wg sync.WaitGroup
+
+	log.Printf("🔍 Encontrados %d token(s) para processamento.\n", len(tokens))
+
+	for _, token := range tokens {
+		t := strings.TrimSpace(token)
+		if t == "" {
+			continue
+		}
+
+		wg.Add(1)
+		go func(agentToken string) {
+			defer wg.Done()
+			iniciarCicloAgenteParaToken(apiURL, agentToken)
+		}(t)
+	}
+
+	wg.Wait()
+}
+
+// Inicia o ciclo de vida completo do agente para um token específico
+func iniciarCicloAgenteParaToken(apiURL string, agentToken string) {
+	log.Printf("🔐 [Token: %s...] Buscando credenciais e configuração de forma segura na API Central...", agentToken[:8])
 	apiConfig, err := FetchConfigFromAPI(apiURL, agentToken)
 	if err != nil {
-		log.Fatalf("❌ ERRO CRÍTICO ao buscar configurações: %v\n", err)
+		log.Printf("❌ ERRO CRÍTICO ao buscar configurações para o token %s...: %v\n", agentToken[:8], err)
+		return // Encerra a goroutine deste token, mas os outros continuam rodando
 	}
 
 	// Montando o Alvo dinâmico a partir do banco
@@ -103,15 +134,15 @@ func main() {
 	}
 
 	intervaloSnapshot := time.Duration(apiConfig.SnapshotIntervalMinutes) * time.Minute
-	log.Printf("⚙️  Alvo configurado: '%s' (%s)\n", apiConfig.Name, apiConfig.DbEngine)
+	log.Printf("⚙️  Alvo configurado: '%s' (%s) - Intervalo: %v\n", apiConfig.Name, apiConfig.DbEngine, intervaloSnapshot)
 
-	var wg sync.WaitGroup
+	var tokenWg sync.WaitGroup
 
 	// Fluxo 1: Extração Massiva (Snapshots) com tempo dinâmico ditado pela API
-	wg.Add(1)
+	tokenWg.Add(1)
 	go func() {
-		defer wg.Done()
-		log.Printf("⏳ [TELEMETRIA] Agendador dinâmico configurado para rodar a cada %v.\n", intervaloSnapshot)
+		defer tokenWg.Done()
+		log.Printf("⏳ [TELEMETRIA - %s] Agendador dinâmico configurado para rodar a cada %v.\n", apiConfig.Name, intervaloSnapshot)
 
 		executarExtraçãoTelemetria(apiURL, targets) // Executa a primeira vez
 
@@ -123,11 +154,11 @@ func main() {
 	}()
 
 	// Fluxo 2: Polling de Tarefas Aprovadas - Fixo a cada 5 segundos
-	wg.Add(1)
+	tokenWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer tokenWg.Done()
 		tasksInterval := 5 * time.Second
-		log.Printf("⏳ [TAREFAS] Agendador de tarefas configurado para rodar a cada %v.\n", tasksInterval)
+		log.Printf("⏳ [TAREFAS - %s] Agendador de tarefas configurado para rodar a cada %v.\n", apiConfig.Name, tasksInterval)
 
 		ticker := time.NewTicker(tasksInterval)
 		defer ticker.Stop()
@@ -136,15 +167,15 @@ func main() {
 		}
 	}()
 
-	wg.Wait()
+	tokenWg.Wait()
 }
 
 func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
-	log.Println("🔄 [TELEMETRIA] Iniciando extração massiva...")
-
 	for _, target := range targets {
+		log.Printf("🔄 [TELEMETRIA - %s] Iniciando extração massiva...", target.Name)
+		
 		if target.DbConnString == "" {
-			log.Printf("⚠️ [TELEMETRIA] Alvo '%s' ignorado: API não retornou Connection String.\n", target.Name)
+			log.Printf("⚠️ [TELEMETRIA - %s] Alvo ignorado: API não retornou Connection String.\n", target.Name)
 			continue
 		}
 
@@ -154,7 +185,7 @@ func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 		if strings.EqualFold(target.DbEngine, "SQL Server") {
 			db, err := ConnectDB(target.DbConnString)
 			if err != nil {
-				log.Printf("❌ [TELEMETRIA] Erro crítico ao conectar no alvo '%s': %v\n", target.Name, err)
+				log.Printf("❌ [TELEMETRIA - %s] Erro crítico ao conectar no alvo: %v\n", target.Name, err)
 				continue
 			}
 
@@ -166,9 +197,9 @@ func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 			plans, _ = ExtractExecutionPlans(db)
 
 			db.Close()
-			log.Printf("📦 [TELEMETRIA] Dados extraídos do banco '%s' com sucesso.\n", target.Name)
+			log.Printf("📦 [TELEMETRIA - %s] Dados extraídos com sucesso.\n", target.Name)
 		} else {
-			log.Printf("⚠️ [TELEMETRIA] Engine %s não suportada no momento.\n", target.DbEngine)
+			log.Printf("⚠️ [TELEMETRIA - %s] Engine %s não suportada no momento.\n", target.Name, target.DbEngine)
 			continue
 		}
 
@@ -182,15 +213,15 @@ func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 			ExecutionPlans: limitPayload(plans, 60000),
 		}
 		SendTelemetry(apiURL, target.AgentToken, telemetry)
+		log.Printf("✅ [TELEMETRIA - %s] Ciclo de extração finalizado.", target.Name)
 	}
-	log.Println("✅ [TELEMETRIA] Ciclo de extração finalizado.")
 }
 
 func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
 	for _, target := range targets {
 		tasks := FetchPendingTasks(apiURL, target.AgentToken)
 		for _, task := range tasks {
-			log.Printf("⚙️ [TAREFAS] Baixando Tarefa #%d aprovada pelo Dashboard...\n", task.ID)
+			log.Printf("⚙️ [TAREFAS - %s] Baixando Tarefa #%d aprovada pelo Dashboard...\n", target.Name, task.ID)
 
 			if target.DbConnString == "" {
 				continue
@@ -199,19 +230,19 @@ func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
 			if strings.EqualFold(target.DbEngine, "SQL Server") {
 				db, err := ConnectDB(target.DbConnString)
 				if err != nil {
-					log.Printf("❌ [TAREFAS] Falha de conexão na Tarefa %d: %v\n", task.ID, err)
+					log.Printf("❌ [TAREFAS - %s] Falha de conexão na Tarefa %d: %v\n", target.Name, task.ID, err)
 					continue
 				}
 
-				log.Printf("⚡ [TAREFAS] Aplicando UpScript no banco de dados...")
+				log.Printf("⚡ [TAREFAS - %s] Aplicando UpScript no banco de dados...", target.Name)
 				err = ExecuteScript(db, task.UpScript)
 				db.Close()
 
 				if err != nil {
-					log.Printf("❌ [TAREFAS] Erro ao executar UpScript (Tarefa #%d): %v\n", task.ID, err)
+					log.Printf("❌ [TAREFAS - %s] Erro ao executar UpScript (Tarefa #%d): %v\n", target.Name, task.ID, err)
 					continue
 				}
-				log.Println("✅ [TAREFAS] Script de Deploy executado com sucesso!")
+				log.Printf("✅ [TAREFAS - %s] Script de Deploy executado com sucesso!\n", target.Name)
 			}
 			MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
 		}
