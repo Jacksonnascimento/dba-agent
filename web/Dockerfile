@@ -12,7 +12,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Injetando a URL da API para o build do frontend
-ENV NEXT_PUBLIC_API_URL=https://api-agente.horizon.com.br
+ENV NEXT_PUBLIC_API_URL=https://api-agente.horizonaj.com.br
 RUN npm run build
 
 # Estágio 3: Execução
