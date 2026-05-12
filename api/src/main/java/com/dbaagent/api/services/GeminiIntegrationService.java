@@ -30,34 +30,39 @@ public class GeminiIntegrationService {
             String apiKey,
             String aiModel,
             String dbEngine) {
-        
+
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" + aiModel + ":generateContent?key=" + apiKey;
 
+        // PROMPT BLINDADO E RESTRITO A TUNING SEGURO
         String prompt = String.format(
-            "Você é um DBA Sênior focado em performance de %s.\n\n" +
-            "OBJETIVO: sugerir otimizações complexas e seguras (com deploy e rollback), " +
-            "baseadas no contexto completo fornecido abaixo.\n\n" +
+            "Você é um DBA Sênior Especialista em Performance e Confiabilidade de %s.\n\n" +
+            "OBJETIVO: Diagnosticar gargalos e gerar scripts de otimização ESTRITAMENTE SEGUROS, " +
+            "focados em performance, baseados no contexto abaixo.\n\n" +
             "## Estrutura (DDL)\n%s\n\n" +
             "## DMVs / Estatísticas dinâmicas\n%s\n\n" +
             "## Wait Stats\n%s\n\n" +
             "## Top Queries (consultas mais custosas)\n%s\n\n" +
             "## Index Stats / Fragmentação / Missing indexes\n%s\n\n" +
             "## Execution Plans (planos de execução)\n%s\n\n" +
-            "REGRAS OBRIGATÓRIAS:\n" +
-            "1. Gere no máximo 3 sugestões consolidadas e priorizadas.\n" +
-            "2. TOLERÂNCIA A DDL TRUNCADO: É esperado que a Estrutura (DDL) esteja incompleta " +
-            "devido a limites de coleta. Se as DMVs, Top Queries ou Missing Indexes indicarem " +
-            "problemas em tabelas ou colunas que NÃO constam no DDL fornecido, VOCÊ É OBRIGADO " +
-            "A INFERIR A ESTRUTURA (assumindo chaves primárias e estrangeiras lógicas padrão). " +
-            "NUNCA DEIXE up_script E down_script VAZIOS. Gere os scripts no modo 'best-effort' " +
-            "com a estrutura inferida e avise sobre essa premissa no texto do diagnostico.\n" +
-            "3. Cada sugestão deve OBRIGATORIAMENTE conter 'up_script' e 'down_script' com sintaxe " +
-            "T-SQL / SQL válida e executável.\n" +
-            "4. Evite mudanças destrutivas; se houver risco de bloqueio de tabela prolongado, " +
-            "descreva no diagnostico.\n\n" +
-            "Responda EXCLUSIVAMENTE em JSON puro com as chaves exatas: \"diagnostico\", " +
-            "\"up_script\", \"down_script\". Não inclua formatação markdown como ```json, " +
-            "devolva apenas o objeto JSON.",
+            "DIRETRIZES DE SEGURANÇA E REGRAS OBRIGATÓRIAS (CRÍTICO):\n" +
+            "1. ESCOPO PERMITIDO: Seus scripts de 'up_script' e 'down_script' devem se limitar a operações " +
+            "de otimização de performance: criação/remoção de índices (CREATE/DROP INDEX), atualização de " +
+            "estatísticas (UPDATE STATISTICS) e desfragmentação (ALTER INDEX REBUILD).\n" +
+            "2. PROIBIÇÃO DE DDL DESTRUTIVO: NUNCA, SOB NENHUMA HIPÓTESE, gere comandos CREATE TABLE, DROP TABLE, " +
+            "ALTER TABLE (para colunas), DROP TRIGGER ou DROP FUNCTION. Assuma que a estrutura do cliente é intocável.\n" +
+            "3. LIDANDO COM DDL TRUNCADO: Se as DMVs indicarem tabelas ou colunas ausentes no DDL fornecido, " +
+            "ASSUMA QUE ELAS JÁ EXISTEM NO BANCO DO CLIENTE. Infira os nomes de colunas lógicas APENAS para criar " +
+            "os índices recomendados, não tente recriar a tabela.\n" +
+            "4. CÓDIGO SEGURO E IDEMPOTENTE: Todo comando de criação ou remoção no 'up_script' e 'down_script' " +
+            "deve ser obrigatoriamente envelopado em blocos condicionais (IF EXISTS / IF NOT EXISTS).\n" +
+            "5. INTERVENÇÃO MANUAL DE CÓDIGO: Se o maior gargalo for código interno (ex: uma Função Escalar iterativa " +
+            "ou Trigger pesada), NÃO tente reescrever o objeto inteiro. Ao invés disso, coloque um alerta estruturado " +
+            "como comentário (/* ALERTA DBA: ... */) no 'up_script' orientando o refactoring manual, e prossiga " +
+            "criando os índices possíveis para as outras falhas.\n" +
+            "6. GARANTIA DE SAÍDA: NUNCA retorne 'up_script' ou 'down_script' vazios. Se não houver o que automatizar, " +
+            "retorne um script com PRINTs e comentários.\n\n" +
+            "Responda EXCLUSIVAMENTE em JSON puro com as chaves exatas: \"diagnostico\", \"up_script\", \"down_script\". " +
+            "Não inclua blocos markdown (```json), devolva apenas o objeto JSON.",
             dbEngine,
             ddl,
             (dmvStats != null ? dmvStats : "N/A"),
@@ -70,19 +75,19 @@ public class GeminiIntegrationService {
         try {
             ObjectNode textPart = objectMapper.createObjectNode();
             textPart.put("text", prompt);
-            
+
             ArrayNode partsArray = objectMapper.createArrayNode();
             partsArray.add(textPart);
-            
+
             ObjectNode contentNode = objectMapper.createObjectNode();
             contentNode.set("parts", partsArray);
-            
+
             ArrayNode contentsArray = objectMapper.createArrayNode();
             contentsArray.add(contentNode);
-            
+
             ObjectNode requestBodyNode = objectMapper.createObjectNode();
             requestBodyNode.set("contents", contentsArray);
-            
+
             String requestBody = objectMapper.writeValueAsString(requestBodyNode);
 
             String response = restClient.post()
@@ -94,8 +99,8 @@ public class GeminiIntegrationService {
 
             JsonNode rootNode = objectMapper.readTree(response);
             String rawText = rootNode.path("candidates").get(0)
-                                   .path("content").path("parts").get(0)
-                                   .path("text").asText();
+                                     .path("content").path("parts").get(0)
+                                     .path("text").asText();
 
             String cleanedJson = rawText.replaceAll("(?i)^```json\\s*", "")
                                         .replaceAll("(?i)^```\\s*", "")
