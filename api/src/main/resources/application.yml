@@ -9,7 +9,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate # Hibernate apenas valida a estrutura, o Flyway cria as tabelas
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -20,3 +20,8 @@ spring:
 
 server:
   port: 8080
+
+# Configuração customizada para o CORS
+app:
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000}

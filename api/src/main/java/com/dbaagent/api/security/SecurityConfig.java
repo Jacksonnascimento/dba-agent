@@ -1,5 +1,6 @@
 package com.dbaagent.api.security;
 
+import org.springframework.beans.factory.annotation.Value; // Importação importante
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -19,6 +20,10 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    // Injeta a URL permitida definida no application.yml / Variável de ambiente
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOrigins;
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AgentAuthenticationFilter agentAuthFilter;
@@ -43,16 +48,15 @@ public class SecurityConfig {
                 // Rotas Públicas
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 
-                // Rotas do Agente (a validação é feita internamente pelo AgentAuthenticationFilter via Header)
+                // Rotas do Agente
                 .requestMatchers("/api/v1/agent/**").permitAll()
                 
-                // Rotas exclusivas de Administração (Gestão de Tenants, Usuários, etc)
+                // Rotas exclusivas de Administração
                 .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
                 
-                // Qualquer outra rota exige estar autenticado (ROLE_ADMIN ou ROLE_CLIENT)
+                // Qualquer outra rota exige estar autenticado
                 .anyRequest().authenticated()
             )
-            // Ordem dos filtros: rate limit -> agent auth -> jwt auth
             .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(agentAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(jwtAuthFilter, AgentAuthenticationFilter.class);
@@ -63,8 +67,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Liberar o frontend local (Next.js)
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        
+        // Agora usa a variável injetada (aceita local ou produção)
+        configuration.setAllowedOrigins(List.of(allowedOrigins)); 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
