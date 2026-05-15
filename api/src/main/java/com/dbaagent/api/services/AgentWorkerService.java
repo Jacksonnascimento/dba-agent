@@ -116,8 +116,6 @@ public class AgentWorkerService {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ZipOutputStream zos = new ZipOutputStream(baos)) {
 
-            // We do NOT write a .env file anymore!
-
             // 1. Write the executable
             String binName = os.equalsIgnoreCase("windows") ? "agent-windows.exe" : "agent-linux";
             ClassPathResource resource = new ClassPathResource("agent-binaries/" + binName);
@@ -133,6 +131,11 @@ public class AgentWorkerService {
                 zos.putNextEntry(errEntry);
                 zos.write("Binário do agente não encontrado no servidor.".getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
+            }
+
+            // CORREÇÃO: Força o uso de HTTPS caso o ambiente não seja localhost
+            if (apiUrl != null && !apiUrl.contains("localhost") && apiUrl.startsWith("http://")) {
+                apiUrl = apiUrl.replaceFirst("http://", "https://");
             }
 
             // 2. Write the install and uninstall scripts with arguments injected!
