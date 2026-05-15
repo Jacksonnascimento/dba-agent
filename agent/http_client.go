@@ -31,6 +31,7 @@ type TaskResponse struct {
 	UpScript             string `json:"upScript"`
 	DownScript           string `json:"downScript"`
 	Status               string `json:"status"`
+	TaskType             string `json:"taskType"`
 }
 
 // Cliente HTTP configurado com timeout expandido (5 minutos) para suportar LLMs síncronos
@@ -130,5 +131,35 @@ func MarkTaskCompleted(apiURL string, token string, taskID int64) {
 		log.Printf("✅ Tarefa #%d marcada como EXECUTADA na API Central.\n", taskID)
 	} else {
 		log.Printf("⚠️ Falha ao concluir tarefa #%d. Status: %d\n", taskID, resp.StatusCode)
+	}
+}
+
+// Avisa a API que o script falhou
+func MarkTaskFailed(apiURL string, token string, taskID int64, errorMessage string) {
+	url := fmt.Sprintf("%s/agent/tasks/%d/fail", apiURL, taskID)
+
+	payload := map[string]string{"error": errorMessage}
+	jsonData, _ := json.Marshal(payload)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ Erro ao criar requisição de falha: %v\n", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-Token", token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("❌ Erro ao avisar API sobre falha: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 || resp.StatusCode == 204 {
+		log.Printf("⚠️ Tarefa #%d marcada como FAILED na API Central.\n", taskID)
+	} else {
+		log.Printf("⚠️ Falha ao reportar falha da tarefa #%d. Status: %d\n", taskID, resp.StatusCode)
 	}
 }

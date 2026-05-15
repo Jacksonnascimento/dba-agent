@@ -42,4 +42,19 @@ public class AgentTokenService {
 
         return repository.save(agentToken);
     }
+
+    public java.util.List<com.dbaagent.api.dtos.AgentTokenResponseDTO> listByTenant(Tenant tenant) {
+        return repository.findByTenantOrderByCreatedAtDesc(tenant).stream().map(token -> {
+            String fullToken = token.getToken();
+            String suffix = fullToken.length() > 4 ? "..." + fullToken.substring(fullToken.length() - 4) : fullToken;
+            return com.dbaagent.api.dtos.AgentTokenResponseDTO.builder()
+                    .id(token.getId())
+                    .description(token.getDescription())
+                    .databaseConnectionId(token.getDatabaseConnection().getId())
+                    .databaseConnectionName(token.getDatabaseConnection().getName())
+                    .tokenSuffix(suffix)
+                    .createdAt(token.getCreatedAt())
+                    .build();
+        }).toList();
+    }
 }

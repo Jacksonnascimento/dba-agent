@@ -28,6 +28,15 @@ public class SuggestionManagementController {
         return ResponseEntity.ok(pending);
     }
 
+    @GetMapping("/executed")
+    public ResponseEntity<List<SuggestionResponseDTO>> getExecutedSuggestions(
+            @AuthenticationPrincipal User authenticatedUser,
+            @RequestParam(required = false) Long databaseConnectionId) {
+        List<SuggestionResponseDTO> executed =
+                suggestionService.listExecuted(authenticatedUser.getTenant(), databaseConnectionId);
+        return ResponseEntity.ok(executed);
+    }
+
     @PostMapping("/{id}/approve")
     public ResponseEntity<SuggestionResponseDTO> approveSuggestion(
             @PathVariable Long id, 
@@ -44,5 +53,14 @@ public class SuggestionManagementController {
         
         SuggestionResponseDTO rejected = suggestionService.reject(id, authenticatedUser.getTenant(), authenticatedUser);
         return ResponseEntity.ok(rejected);
+    }
+
+    @PostMapping("/{id}/request-rollback")
+    public ResponseEntity<SuggestionResponseDTO> requestRollback(
+            @PathVariable Long id, 
+            @AuthenticationPrincipal User authenticatedUser) {
+        
+        SuggestionResponseDTO rollback = suggestionService.requestRollback(id, authenticatedUser.getTenant(), authenticatedUser);
+        return ResponseEntity.ok(rollback);
     }
 }

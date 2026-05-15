@@ -23,7 +23,7 @@ public class SecurityConfig {
 
     // Injeta a URL permitida definida no application.yml / Variável de ambiente
     @Value("${app.cors.allowed-origins}")
-    private String allowedOrigins;
+    private List<String> allowedOrigins;
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final AgentAuthenticationFilter agentAuthFilter;
@@ -50,6 +50,7 @@ public class SecurityConfig {
                 
                 // Rotas do Agente
                 .requestMatchers("/api/v1/agent/**").permitAll()
+                .requestMatchers("/api/v1/agent-workers/me/**").permitAll()
                 
                 // Rotas exclusivas de Administração
                 .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
@@ -69,7 +70,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         
         // Agora usa a variável injetada (aceita local ou produção)
-        configuration.setAllowedOrigins(List.of(allowedOrigins)); 
+        configuration.setAllowedOrigins(allowedOrigins); 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

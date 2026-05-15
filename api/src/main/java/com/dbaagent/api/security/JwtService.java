@@ -18,8 +18,8 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    // Utiliza uma chave padrão segura (Base64) caso não exista no application.yml
-    @Value("${jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
+    // Utiliza a chave injetada via application.yml
+    @Value("${jwt.secret}")
     private String secretKey;
 
     // Tempo de expiração padrão: 1 dia (86400000 ms)

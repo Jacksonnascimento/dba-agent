@@ -21,6 +21,7 @@ type AgentConfigAPI struct {
 	DbEngine                string `json:"dbEngine"`
 	ConnectionUri           string `json:"connectionUri"`
 	SnapshotIntervalMinutes int    `json:"snapshotIntervalMinutes"`
+	AgentToken              string `json:"agentToken"`
 }
 
 type AgentTarget struct {
@@ -35,6 +36,14 @@ type program struct {
 	quit chan struct{}
 }
 
+type SafeWorkerConfig struct {
+	mu       sync.RWMutex
+	Targets  []AgentTarget
+	Interval time.Duration
+}
+
+var globalConfig SafeWorkerConfig
+
 func limitPayload(s string, max int) string {
 	if len(s) <= max {
 		return s
@@ -42,13 +51,13 @@ func limitPayload(s string, max int) string {
 	return s[:max] + "\n-- truncated by agent --"
 }
 
-// FetchConfigFromAPI faz o request seguro para o backend buscando os dados sensíveis.
-func FetchConfigFromAPI(apiURL string, token string) (*AgentConfigAPI, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/agent/config", apiURL), nil)
+// FetchConfigsFromAPI faz o request seguro para o backend buscando todas as configs dos bancos deste worker.
+func FetchConfigsFromAPI(apiURL string, workerToken string) ([]AgentConfigAPI, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/agent-workers/me/config", apiURL), nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("X-Agent-Token", token)
+	req.Header.Set("X-Worker-Token", workerToken)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -63,12 +72,12 @@ func FetchConfigFromAPI(apiURL string, token string) (*AgentConfigAPI, error) {
 		return nil, fmt.Errorf("Erro API (Status %d): %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var config AgentConfigAPI
-	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
+	var configs []AgentConfigAPI
+	if err := json.NewDecoder(resp.Body).Decode(&configs); err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	return configs, nil
 }
 
 // Start é chamado quando o serviço é iniciado pelo SO
@@ -98,51 +107,55 @@ func (p *program) run() {
 	fmt.Println("🛡️  Modo Operacional: BYOK / Nuvem Gerenciada (Multi-Token)")
 	fmt.Println("=======================================================")
 
-	apiURL := os.Getenv("API_URL")
-	if apiURL == "" {
-		apiURL = "http://localhost:8080/api/v1"
-	}
-
-	// Agora aceita uma lista separada por vírgulas de tokens no .env
-	agentTokensRaw := os.Getenv("X_AGENT_TOKENS")
-
-	// Fallback para manter compatibilidade com a versão anterior caso o usuário não tenha atualizado o .env
-	if agentTokensRaw == "" {
-		agentTokensRaw = os.Getenv("X_AGENT_TOKEN")
-	}
-
-	if strings.TrimSpace(agentTokensRaw) == "" {
-		log.Fatalln("❌ ERRO FATAL: X_AGENT_TOKENS ou X_AGENT_TOKEN não encontrado no .env ou nas variáveis de ambiente.")
-	}
-
-	tokens := strings.Split(agentTokensRaw, ",")
-	var wg sync.WaitGroup
-
-	log.Printf("🔍 Encontrados %d token(s) para processamento.\n", len(tokens))
-
-	for _, token := range tokens {
-		t := strings.TrimSpace(token)
-		if t == "" {
-			continue
+	// Lê argumentos via SO (se estiver rodando como serviço) ou fallback para Env var
+	var apiURL, workerToken string
+	for i, arg := range os.Args {
+		if arg == "-api" && i+1 < len(os.Args) {
+			apiURL = os.Args[i+1]
 		}
-
-		wg.Add(1)
-		go func(agentToken string) {
-			defer wg.Done()
-			iniciarCicloAgenteParaToken(apiURL, agentToken)
-		}(t)
+		if arg == "-token" && i+1 < len(os.Args) {
+			workerToken = os.Args[i+1]
+		}
 	}
+
+	if apiURL == "" {
+		apiURL = os.Getenv("API_URL")
+		if apiURL == "" {
+			apiURL = "http://localhost:8080/api/v1"
+		}
+	}
+
+	if workerToken == "" {
+		workerToken = os.Getenv("X_WORKER_TOKEN")
+	}
+
+	if strings.TrimSpace(workerToken) == "" {
+		log.Fatalln("❌ ERRO FATAL: -token ou X_WORKER_TOKEN não encontrado.")
+	}
+
+	iniciarCicloWorker(apiURL, workerToken)
 
 	// Bloqueia a execução aguardando o sinal de parada do serviço
 	<-p.quit
 }
 
 func main() {
+	action := flag.String("service", "", "Ações do serviço: install, uninstall, start, stop, restart")
+	apiArg := flag.String("api", "", "URL da API")
+	tokenArg := flag.String("token", "", "Token do Worker")
+	flag.Parse()
+
 	// Configuração do serviço no Sistema Operacional
+	svcArgs := []string{}
+	if *apiArg != "" && *tokenArg != "" {
+		svcArgs = []string{"-api", *apiArg, "-token", *tokenArg}
+	}
+
 	svcConfig := &service.Config{
 		Name:        "DBAAgentWorker",
 		DisplayName: "DBA Agent Worker",
 		Description: "Serviço de coleta e envio de métricas para o SaaS DBA Agent.",
+		Arguments:   svcArgs,
 	}
 
 	prg := &program{}
@@ -150,10 +163,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Verifica se o usuário passou alguma flag no terminal
-	action := flag.String("service", "", "Ações do serviço: install, uninstall, start, stop, restart")
-	flag.Parse()
 
 	if *action != "" {
 		err = service.Control(s, *action)
@@ -171,70 +180,122 @@ func main() {
 	}
 }
 
-// Inicia o ciclo de vida completo do agente para um token específico
-func iniciarCicloAgenteParaToken(apiURL string, agentToken string) {
-	var apiConfig *AgentConfigAPI
-	var err error
-
-	// LOOP DE RESILIÊNCIA: Tenta conectar na API até obter sucesso
+// Inicia o ciclo de vida completo do Worker
+func iniciarCicloWorker(apiURL string, workerToken string) {
+	// Primeira carga obrigatória para iniciar o ciclo
 	for {
-		log.Printf("🔐 [Token: %s...] Buscando credenciais e configuração na API Central...", agentToken[:8])
-		apiConfig, err = FetchConfigFromAPI(apiURL, agentToken)
+		log.Printf("🔐 [Worker] Buscando credenciais e configuração inicial...")
+		apiConfigs, err := FetchConfigsFromAPI(apiURL, workerToken)
 
 		if err == nil {
-			log.Printf("✅ [Token: %s...] Configuração carregada com sucesso!", agentToken[:8])
+			updateGlobalConfig(apiConfigs)
+			globalConfig.mu.RLock()
+			interval := globalConfig.Interval
+			globalConfig.mu.RUnlock()
+			log.Printf("✅ [Worker] Configurações carregadas com sucesso! Intervalo Mestre: %v", interval)
 			break
 		}
 
-		log.Printf("⚠️ [Token: %s...] API indisponível ou erro na busca. Tentando novamente em 15s... (Erro: %v)\n", agentToken[:8], err)
+		log.Printf("⚠️ [Worker] API indisponível ou erro na busca. Tentando novamente em 15s... (Erro: %v)\n", err)
 		time.Sleep(15 * time.Second)
 	}
 
-	// Montando o Alvo dinâmico a partir do banco
-	targets := []AgentTarget{
-		{
-			Name:         apiConfig.Name,
-			DbEngine:     apiConfig.DbEngine,
-			DbConnString: apiConfig.ConnectionUri,
-			AgentToken:   agentToken,
-		},
-	}
+	var wg sync.WaitGroup
 
-	intervaloSnapshot := time.Duration(apiConfig.SnapshotIntervalMinutes) * time.Minute
-	log.Printf("⚙️  Alvo configurado: '%s' (%s) - Intervalo: %v\n", apiConfig.Name, apiConfig.DbEngine, intervaloSnapshot)
-
-	var tokenWg sync.WaitGroup
-
-	// Fluxo 1: Extração Massiva (Snapshots) com tempo dinâmico ditado pela API
-	tokenWg.Add(1)
+	// Fluxo 1: Hot Reload (Polling de Configuração a cada minuto)
+	wg.Add(1)
 	go func() {
-		defer tokenWg.Done()
-		log.Printf("⏳ [TELEMETRIA - %s] Agendador dinâmico configurado para rodar a cada %v.\n", apiConfig.Name, intervaloSnapshot)
-
-		executarExtraçãoTelemetria(apiURL, targets) // Executa a primeira vez
-
-		ticker := time.NewTicker(intervaloSnapshot)
+		defer wg.Done()
+		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			executarExtraçãoTelemetria(apiURL, targets)
+			apiConfigs, err := FetchConfigsFromAPI(apiURL, workerToken)
+			if err == nil {
+				updateGlobalConfig(apiConfigs)
+			} else {
+				log.Printf("⚠️ [Hot Reload] Falha ao atualizar configurações do agente: %v", err)
+			}
 		}
 	}()
 
-	// Fluxo 2: Polling de Tarefas Aprovadas - Fixo a cada 5 segundos
-	tokenWg.Add(1)
+	// Fluxo 2: Extração Massiva (Baseada no Intervalo Mestre dinâmico)
+	wg.Add(1)
 	go func() {
-		defer tokenWg.Done()
+		defer wg.Done()
+		var lastRun time.Time
+
+		// Executa a primeira vez imediatamente
+		globalConfig.mu.RLock()
+		targets := globalConfig.Targets
+		globalConfig.mu.RUnlock()
+		executarExtraçãoTelemetria(apiURL, targets)
+		lastRun = time.Now()
+
+		// Acorda frequentemente (30s) para verificar se é hora de rodar, permitindo mudanças dinâmicas
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			globalConfig.mu.RLock()
+			interval := globalConfig.Interval
+			targets := globalConfig.Targets
+			globalConfig.mu.RUnlock()
+
+			if len(targets) > 0 && time.Since(lastRun) >= interval {
+				executarExtraçãoTelemetria(apiURL, targets)
+				lastRun = time.Now()
+			}
+		}
+	}()
+
+	// Fluxo 3: Polling de Tarefas Aprovadas (Para Coleta Manual e Scripts)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		tasksInterval := 5 * time.Second
-		log.Printf("⏳ [TAREFAS - %s] Agendador de tarefas configurado para rodar a cada %v.\n", apiConfig.Name, tasksInterval)
+		log.Printf("⏳ [TAREFAS] Agendador de tarefas configurado para rodar a cada %v.\n", tasksInterval)
 
 		ticker := time.NewTicker(tasksInterval)
 		defer ticker.Stop()
 		for range ticker.C {
+			globalConfig.mu.RLock()
+			targets := globalConfig.Targets
+			globalConfig.mu.RUnlock()
 			verificarEExecutarTarefas(apiURL, targets)
 		}
 	}()
 
-	tokenWg.Wait()
+	wg.Wait()
+}
+
+func updateGlobalConfig(apiConfigs []AgentConfigAPI) {
+	var newTargets []AgentTarget
+	for _, conf := range apiConfigs {
+		newTargets = append(newTargets, AgentTarget{
+			Name:         conf.Name,
+			DbEngine:     conf.DbEngine,
+			DbConnString: conf.ConnectionUri,
+			AgentToken:   conf.AgentToken,
+		})
+	}
+
+	interval := 24 * time.Hour // Default 24h fallback
+	if len(apiConfigs) > 0 {
+		interval = time.Duration(apiConfigs[0].SnapshotIntervalMinutes) * time.Minute
+	}
+
+	globalConfig.mu.Lock()
+	defer globalConfig.mu.Unlock()
+	
+	// Apenas para logar caso ocorra uma mudança
+	if len(globalConfig.Targets) != len(newTargets) || globalConfig.Interval != interval {
+		if len(globalConfig.Targets) > 0 { // Ignorar no primeiro boot
+			log.Printf("🔄 [Hot Reload] Configurações alteradas na API! Atualizando memória local (Bancos: %d, Intervalo: %v).", len(newTargets), interval)
+		}
+	}
+	
+	globalConfig.Targets = newTargets
+	globalConfig.Interval = interval
 }
 
 func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
@@ -288,7 +349,21 @@ func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
 	for _, target := range targets {
 		tasks := FetchPendingTasks(apiURL, target.AgentToken)
 		for _, task := range tasks {
-			log.Printf("⚙️ [TAREFAS - %s] Baixando Tarefa #%d aprovada pelo Dashboard...\n", target.Name, task.ID)
+			if task.TaskType == "FORCE_TELEMETRY" {
+				log.Printf("⚡ [TAREFAS - %s] Comando de Extração Manual recebido (Tarefa #%d)!", target.Name, task.ID)
+				executarExtraçãoTelemetria(apiURL, []AgentTarget{target})
+				MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
+				continue
+			}
+
+			tipoStr := "Deploy (UpScript)"
+			scriptParaRodar := task.UpScript
+			if task.TaskType == "ROLLBACK" {
+				tipoStr = "Rollback (DownScript)"
+				scriptParaRodar = task.DownScript
+			}
+
+			log.Printf("⚙️ [TAREFAS - %s] Baixando Tarefa #%d aprovada pelo Dashboard (%s)...\n", target.Name, task.ID, tipoStr)
 
 			if target.DbConnString == "" {
 				continue
@@ -301,15 +376,16 @@ func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
 					continue
 				}
 
-				log.Printf("⚡ [TAREFAS - %s] Aplicando UpScript no banco de dados...", target.Name)
-				err = ExecuteScript(db, task.UpScript)
+				log.Printf("⚡ [TAREFAS - %s] Aplicando %s no banco de dados...", target.Name, tipoStr)
+				err = ExecuteScript(db, scriptParaRodar)
 				db.Close()
 
 				if err != nil {
-					log.Printf("❌ [TAREFAS - %s] Erro ao executar UpScript (Tarefa #%d): %v\n", target.Name, task.ID, err)
+					log.Printf("❌ [TAREFAS - %s] Erro ao executar %s (Tarefa #%d): %v\n", target.Name, tipoStr, task.ID, err)
+					MarkTaskFailed(apiURL, target.AgentToken, task.ID, err.Error())
 					continue
 				}
-				log.Printf("✅ [TAREFAS - %s] Script de Deploy executado com sucesso!\n", target.Name)
+				log.Printf("✅ [TAREFAS - %s] %s executado com sucesso!\n", target.Name, tipoStr)
 			}
 			MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
 		}

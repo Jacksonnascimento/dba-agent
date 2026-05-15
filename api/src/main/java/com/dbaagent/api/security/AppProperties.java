@@ -11,8 +11,8 @@ public class AppProperties {
     public Cors getCors() { return cors; }
 
     public static class Cors {
-        private String allowedOrigins;
-        public String getAllowedOrigins() { return allowedOrigins; }
-        public void setAllowedOrigins(String allowedOrigins) { this.allowedOrigins = allowedOrigins; }
+        private java.util.List<String> allowedOrigins;
+        public java.util.List<String> getAllowedOrigins() { return allowedOrigins; }
+        public void setAllowedOrigins(java.util.List<String> allowedOrigins) { this.allowedOrigins = allowedOrigins; }
     }
 }

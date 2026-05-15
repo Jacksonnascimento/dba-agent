@@ -66,4 +66,13 @@ public class DatabaseConnectionController {
                 snapshotService.listSnapshots(user.getTenant(), db, PageRequest.of(page, Math.min(size, 100)));
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<DatabaseConnectionResponseDTO> update(
+            @AuthenticationPrincipal User user,
+            @PathVariable Long id,
+            @Valid @RequestBody com.dbaagent.api.dtos.DatabaseConnectionUpdateRequestDTO request) {
+
+        return ResponseEntity.ok(databaseConnectionService.update(id, user.getTenant(), request));
+    }
 }

@@ -57,6 +57,40 @@ public class DatabaseConnectionService {
         return repository.findByTenantAndIsActiveTrue(tenant).stream().map(this::map).toList();
     }
 
+    @Transactional
+    public DatabaseConnectionResponseDTO update(Long id, Tenant tenant, com.dbaagent.api.dtos.DatabaseConnectionUpdateRequestDTO request) {
+        DatabaseConnection connection = repository.findByIdAndTenant(id, tenant)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Conexão não encontrada"));
+
+        connection.setName(request.getName().trim());
+        connection.setActive(request.getActive());
+        
+        // Verifica se a engine foi alterada (neste caso obriga a refazer a URI)
+        if (request.getDbEngine() != null && !request.getDbEngine().isBlank()) {
+            connection.setDbEngine(request.getDbEngine().trim());
+        }
+
+        // Se informou dados de conexão, reconstrói a URI
+        if (request.getHost() != null && !request.getHost().isBlank() &&
+            request.getPort() != null &&
+            request.getDatabase() != null && !request.getDatabase().isBlank() &&
+            request.getUsername() != null && !request.getUsername().isBlank() &&
+            request.getPassword() != null && !request.getPassword().isBlank()) {
+
+            String safeUser = URLEncoder.encode(request.getUsername().trim(), StandardCharsets.UTF_8);
+            String safePassword = URLEncoder.encode(request.getPassword(), StandardCharsets.UTF_8);
+            String protocol = connection.getDbEngine().equalsIgnoreCase("PostgreSQL") ? "postgres" : "sqlserver";
+
+            String builtUri = String.format("%s://%s:%s@%s:%d?database=%s&encrypt=disable",
+                    protocol, safeUser, safePassword,
+                    request.getHost().trim(), request.getPort(), request.getDatabase().trim());
+            connection.setConnectionUri(builtUri);
+        }
+
+        return map(repository.save(connection));
+    }
+
     private DatabaseConnectionResponseDTO map(DatabaseConnection c) {
         return DatabaseConnectionResponseDTO.builder()
                 .id(c.getId())

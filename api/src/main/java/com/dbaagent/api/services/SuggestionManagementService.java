@@ -54,6 +54,38 @@ public class SuggestionManagementService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<SuggestionResponseDTO> listExecuted(Tenant tenant, Long databaseConnectionId) {
+        List<OptimizationSuggestion> suggestions;
+        List<SuggestionStatus> finalStatuses = List.of(
+                SuggestionStatus.EXECUTED,
+                SuggestionStatus.FAILED,
+                SuggestionStatus.ROLLBACK_PENDING,
+                SuggestionStatus.ROLLED_BACK,
+                SuggestionStatus.ROLLBACK_FAILED);
+
+        if (databaseConnectionId == null) {
+            suggestions = repository.findAll().stream() // fallback since no findByTenantAndStatusIn in repo yet, let's filter manually
+                    .filter(s -> s.getTenant().getId().equals(tenant.getId()))
+                    .filter(s -> finalStatuses.contains(s.getStatus()))
+                    .collect(Collectors.toList());
+        } else {
+            DatabaseConnection databaseConnection = databaseConnectionRepository
+                    .findByIdAndTenant(databaseConnectionId, tenant)
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Banco não encontrado para o tenant informado."));
+            suggestions = repository.findByTenantAndDatabaseConnectionAndStatusIn(
+                    tenant,
+                    databaseConnection,
+                    finalStatuses);
+        }
+        
+        return suggestions.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public SuggestionResponseDTO approve(Long id, Tenant tenant, User user) {
         OptimizationSuggestion suggestion = repository.findById(id)
@@ -101,6 +133,31 @@ public class SuggestionManagementService {
                 "USER",
                 "user:" + user.getId(),
                 "Sugestão rejeitada no painel");
+        
+        return mapToDTO(suggestion);
+    }
+
+    @Transactional
+    public SuggestionResponseDTO requestRollback(Long id, Tenant tenant, User user) {
+        OptimizationSuggestion suggestion = repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Sugestão não encontrada com o ID: " + id));
+        
+        if (!suggestion.getTenant().getId().equals(tenant.getId())) {
+            throw new RuntimeException("Acesso negado: Esta sugestão pertence a outra empresa.");
+        }
+
+        if (suggestion.getStatus() != SuggestionStatus.EXECUTED && suggestion.getStatus() != SuggestionStatus.ROLLBACK_FAILED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Apenas sugestões EXECUTED ou ROLLBACK_FAILED podem sofrer Rollback.");
+        }
+
+        suggestion.setStatus(SuggestionStatus.ROLLBACK_PENDING);
+        repository.save(suggestion);
+        auditLogService.log(
+                suggestion,
+                "ROLLBACK_REQUESTED",
+                "USER",
+                "user:" + user.getId(),
+                "Rollback solicitado pelo usuário");
         
         return mapToDTO(suggestion);
     }

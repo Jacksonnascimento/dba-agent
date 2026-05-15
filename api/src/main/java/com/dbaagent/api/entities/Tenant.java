@@ -19,6 +19,16 @@ public class Tenant {
     @Convert(converter = SensitiveStringCryptoConverter.class)
     private String geminiApiKey;
 
+    @Column(name = "claude_api_key", length = 500)
+    @Convert(converter = SensitiveStringCryptoConverter.class)
+    private String claudeApiKey;
+
+    @Column(name = "ai_provider", length = 50)
+    private String aiProvider = "GEMINI";
+
+    @Column(name = "ai_model", length = 100)
+    private String aiModel;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
@@ -36,6 +46,15 @@ public class Tenant {
 
     public String getGeminiApiKey() { return geminiApiKey; }
     public void setGeminiApiKey(String geminiApiKey) { this.geminiApiKey = geminiApiKey; }
+
+    public String getClaudeApiKey() { return claudeApiKey; }
+    public void setClaudeApiKey(String claudeApiKey) { this.claudeApiKey = claudeApiKey; }
+
+    public String getAiProvider() { return aiProvider; }
+    public void setAiProvider(String aiProvider) { this.aiProvider = aiProvider; }
+
+    public String getAiModel() { return aiModel; }
+    public void setAiModel(String aiModel) { this.aiModel = aiModel; }
 
     public Boolean getActive() { return isActive; }
     public void setActive(Boolean active) { isActive = active; }

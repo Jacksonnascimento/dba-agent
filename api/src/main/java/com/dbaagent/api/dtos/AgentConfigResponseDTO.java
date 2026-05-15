@@ -5,6 +5,7 @@ public class AgentConfigResponseDTO {
     private String dbEngine;
     private String connectionUri;
     private Integer snapshotIntervalMinutes;
+    private String agentToken;
 
     public AgentConfigResponseDTO() {}
 
@@ -19,4 +20,7 @@ public class AgentConfigResponseDTO {
 
     public Integer getSnapshotIntervalMinutes() { return snapshotIntervalMinutes; }
     public void setSnapshotIntervalMinutes(Integer snapshotIntervalMinutes) { this.snapshotIntervalMinutes = snapshotIntervalMinutes; }
+
+    public String getAgentToken() { return agentToken; }
+    public void setAgentToken(String agentToken) { this.agentToken = agentToken; }
 }

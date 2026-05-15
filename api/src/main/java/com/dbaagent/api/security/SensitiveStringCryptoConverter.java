@@ -73,11 +73,29 @@ public class SensitiveStringCryptoConverter implements AttributeConverter<String
 
     private static byte[] loadKey() {
         String b64 = System.getenv("APP_ENCRYPTION_KEY");
+        
+        // Se não estiver nas variáveis de ambiente do SO, tenta ler do .env local
         if (b64 == null || b64.isBlank()) {
-            // Fallback de desenvolvimento para não quebrar ambiente local.
-            b64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
-            System.err.println("WARN: APP_ENCRYPTION_KEY ausente, usando chave de desenvolvimento.");
+            try {
+                java.nio.file.Path envPath = java.nio.file.Paths.get(".env");
+                if (java.nio.file.Files.exists(envPath)) {
+                    java.util.List<String> lines = java.nio.file.Files.readAllLines(envPath);
+                    for (String line : lines) {
+                        if (line.startsWith("APP_ENCRYPTION_KEY=")) {
+                            b64 = line.substring("APP_ENCRYPTION_KEY=".length()).trim();
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                // ignora e deixa falhar abaixo
+            }
         }
+
+        if (b64 == null || b64.isBlank()) {
+            throw new IllegalStateException("FATAL: APP_ENCRYPTION_KEY environment variable is missing.");
+        }
+        
         byte[] key = Base64.getDecoder().decode(b64);
         if (key.length != 32) {
             throw new IllegalStateException("APP_ENCRYPTION_KEY must decode to 32 bytes for AES-256");

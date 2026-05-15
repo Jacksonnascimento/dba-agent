@@ -19,6 +19,11 @@ public interface OptimizationSuggestionRepository extends JpaRepository<Optimiza
             DatabaseConnection databaseConnection,
             SuggestionStatus status);
 
+    List<OptimizationSuggestion> findByTenantAndDatabaseConnectionAndStatusIn(
+            Tenant tenant,
+            DatabaseConnection databaseConnection,
+            List<SuggestionStatus> statuses);
+
     Optional<OptimizationSuggestion> findByTenantAndDatabaseConnectionAndSchemaHashAndStatus(
             Tenant tenant,
             DatabaseConnection databaseConnection,

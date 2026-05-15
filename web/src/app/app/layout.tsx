@@ -4,14 +4,17 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useEffect } from "react";
+import { Database, Server, Camera, Settings, Users, ShieldAlert, LayoutDashboard } from "lucide-react";
 
 const nav = [
-  { href: "/app", label: "Visão geral" },
-  { href: "/app/databases", label: "Bancos" },
-  { href: "/app/settings", label: "BYOK / Config" },
-  { href: "/app/suggestions", label: "Sugestões" },
-  { href: "/app/snapshots", label: "Snapshots" },
-  { href: "/app/audit", label: "Auditoria" },
+  { href: "/app", label: "Visão geral", icon: LayoutDashboard },
+  { href: "/app/databases", label: "Bancos", icon: Database },
+  { href: "/app/agents", label: "Agentes", icon: Server },
+  { href: "/app/snapshots", label: "Snapshots", icon: Camera },
+  { href: "/app/settings", label: "BYOK / Config", icon: Settings },
+  { href: "/app/suggestions", label: "Sugestões", icon: ShieldAlert },
+  { href: "/app/users", label: "Usuários", icon: Users },
+  { href: "/app/audit", label: "Auditoria", icon: ShieldAlert },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -49,12 +52,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={[
-                      "block rounded-lg px-3 py-2 text-sm",
+                      "flex items-center gap-2 rounded-lg px-3 py-2 text-sm",
                       active
                         ? "bg-zinc-950 border border-zinc-800 text-white"
                         : "text-zinc-300 hover:bg-zinc-950/60 hover:text-white",
                     ].join(" ")}
                   >
+                    {item.icon && <item.icon className="w-5 h-5" />}
                     {item.label}
                   </Link>
                 );

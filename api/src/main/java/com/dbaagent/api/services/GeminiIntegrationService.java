@@ -31,7 +31,8 @@ public class GeminiIntegrationService {
             String aiModel,
             String dbEngine) {
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + aiModel + ":generateContent?key=" + apiKey;
+        String cleanModel = aiModel.startsWith("models/") ? aiModel.replace("models/", "") : aiModel;
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + cleanModel + ":generateContent?key=" + apiKey;
 
         // PROMPT BLINDADO E RESTRITO A TUNING SEGURO
         String prompt = String.format(
@@ -60,7 +61,10 @@ public class GeminiIntegrationService {
             "como comentário (/* ALERTA DBA: ... */) no 'up_script' orientando o refactoring manual, e prossiga " +
             "criando os índices possíveis para as outras falhas.\n" +
             "6. GARANTIA DE SAÍDA: NUNCA retorne 'up_script' ou 'down_script' vazios. Se não houver o que automatizar, " +
-            "retorne um script com PRINTs e comentários.\n\n" +
+            "retorne um script com PRINTs e comentários.\n" +
+            "7. SINTAXE T-SQL RIGOROSA: Ao gerar scripts para SQL Server, não utilize ponto-e-vírgula ';' isolado como terminador " +
+            "obrigatório se isso quebrar blocos IF/BEGIN/END. NUNCA utilize 'GO' nos scripts, pois o driver Go MSSQL não suporta. " +
+            "Mantenha a sintaxe impecável para não causar 'Incorrect syntax near'.\n\n" +
             "Responda EXCLUSIVAMENTE em JSON puro com as chaves exatas: \"diagnostico\", \"up_script\", \"down_script\". " +
             "Não inclua blocos markdown (```json), devolva apenas o objeto JSON.",
             dbEngine,
@@ -121,5 +125,37 @@ public class GeminiIntegrationService {
     // Compatibilidade com chamadas antigas
     public AiAnalysisResultDTO analyzeWithGemini(String ddl, String dmvStats, String apiKey, String aiModel, String dbEngine) {
         return analyzeWithGeminiRich(ddl, dmvStats, null, null, null, null, apiKey, aiModel, dbEngine);
+    }
+
+    public void testConnection(String apiKey, String aiModel) {
+        String cleanModel = aiModel.startsWith("models/") ? aiModel.replace("models/", "") : aiModel;
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + cleanModel + ":generateContent?key=" + apiKey;
+        try {
+            ObjectNode textPart = objectMapper.createObjectNode();
+            textPart.put("text", "Responda apenas 'Conectado'");
+
+            ArrayNode partsArray = objectMapper.createArrayNode();
+            partsArray.add(textPart);
+
+            ObjectNode contentNode = objectMapper.createObjectNode();
+            contentNode.set("parts", partsArray);
+
+            ArrayNode contentsArray = objectMapper.createArrayNode();
+            contentsArray.add(contentNode);
+
+            ObjectNode requestBodyNode = objectMapper.createObjectNode();
+            requestBodyNode.set("contents", contentsArray);
+
+            String requestBody = objectMapper.writeValueAsString(requestBodyNode);
+
+            restClient.post()
+                    .uri(url)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Erro ao conectar com Gemini: " + e.getMessage(), e);
+        }
     }
 }

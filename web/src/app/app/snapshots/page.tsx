@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import type { DatabaseConnection, Page, Snapshot } from "@/lib/types";
+import { CopyButton } from "@/components/CopyButton";
 
 export default function SnapshotsPage() {
   const [dbs, setDbs] = useState<DatabaseConnection[]>([]);
@@ -119,27 +120,30 @@ export default function SnapshotsPage() {
                   </div>
                 </div>
                 <div className="mt-2 grid gap-2 lg:grid-cols-2">
-                  <details className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-2">
-                    <summary className="cursor-pointer text-xs text-zinc-200">
-                      Wait stats
+                  <details className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-2 overflow-hidden">
+                    <summary className="cursor-pointer text-xs text-zinc-200 flex justify-between items-center">
+                      <span>Wait stats</span>
+                      <CopyButton text={s.waitStats ?? ""} />
                     </summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs text-zinc-200">
                       {s.waitStats ?? ""}
                     </pre>
                   </details>
-                  <details className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-2">
-                    <summary className="cursor-pointer text-xs text-zinc-200">
-                      Top queries
+                  <details className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-2 overflow-hidden">
+                    <summary className="cursor-pointer text-xs text-zinc-200 flex justify-between items-center">
+                      <span>Top queries</span>
+                      <CopyButton text={s.topQueries ?? ""} />
                     </summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs text-zinc-200">
                       {s.topQueries ?? ""}
                     </pre>
                   </details>
-                  <details className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-2 lg:col-span-2">
-                    <summary className="cursor-pointer text-xs text-zinc-200">
-                      Execution plans
+                  <details className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-2 lg:col-span-2 overflow-hidden">
+                    <summary className="cursor-pointer text-xs text-zinc-200 flex justify-between items-center">
+                      <span>Execution plans</span>
+                      <CopyButton text={s.executionPlans ?? ""} />
                     </summary>
-                    <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs text-zinc-200">
                       {s.executionPlans ?? ""}
                     </pre>
                   </details>

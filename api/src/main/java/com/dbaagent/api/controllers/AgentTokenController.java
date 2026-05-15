@@ -42,4 +42,9 @@ public class AgentTokenController {
                 "createdAt", newToken.getCreatedAt()
         ));
     }
+
+    @GetMapping
+    public ResponseEntity<java.util.List<com.dbaagent.api.dtos.AgentTokenResponseDTO>> listTokens(@AuthenticationPrincipal User loggedUser) {
+        return ResponseEntity.ok(agentTokenService.listByTenant(loggedUser.getTenant()));
+    }
 }

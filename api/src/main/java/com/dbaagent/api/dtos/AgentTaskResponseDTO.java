@@ -9,6 +9,7 @@ public class AgentTaskResponseDTO {
     private String upScript;
     private String downScript;
     private String status;
+    private String taskType;
 
     public AgentTaskResponseDTO() {}
 
@@ -36,6 +37,9 @@ public class AgentTaskResponseDTO {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 
+    public String getTaskType() { return taskType; }
+    public void setTaskType(String taskType) { this.taskType = taskType; }
+
     // Implementação nativa do Builder exigida pela sua Controller
     public static Builder builder() {
         return new Builder();
@@ -52,6 +56,7 @@ public class AgentTaskResponseDTO {
         public Builder upScript(String upScript) { dto.setUpScript(upScript); return this; }
         public Builder downScript(String downScript) { dto.setDownScript(downScript); return this; }
         public Builder status(String status) { dto.setStatus(status); return this; }
+        public Builder taskType(String taskType) { dto.setTaskType(taskType); return this; }
         
         public AgentTaskResponseDTO build() { return dto; }
     }

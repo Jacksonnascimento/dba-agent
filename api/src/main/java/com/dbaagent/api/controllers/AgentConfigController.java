@@ -31,7 +31,7 @@ public class AgentConfigController {
         dto.setName(dbConnection.getName());
         dto.setDbEngine(dbConnection.getDbEngine());
         dto.setConnectionUri(dbConnection.getConnectionUri()); // Seu CryptoConverter já cuida da decifragem aqui
-        dto.setSnapshotIntervalMinutes(dbConnection.getSnapshotIntervalMinutes());
+        dto.setSnapshotIntervalMinutes(1440); // Hardcoded para legacy
 
         return ResponseEntity.ok(dto);
     }

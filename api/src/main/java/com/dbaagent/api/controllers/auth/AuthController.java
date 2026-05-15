@@ -38,8 +38,19 @@ public class AuthController {
                 if (!user.getActive()) {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Usuário inativo");
                 }
+                
+                // Bloqueio do master se existirem outros usuários
+                if ("master".equals(email) && userRepository.count() > 1) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acesso do master desativado.");
+                }
+
                 String token = jwtService.generateToken(user);
-                return ResponseEntity.ok(Map.of("token", token));
+                return ResponseEntity.ok(Map.of(
+                        "token", token,
+                        "role", user.getRole(),
+                        "name", user.getName(),
+                        "email", user.getEmail()
+                ));
             }
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciais inválidas");

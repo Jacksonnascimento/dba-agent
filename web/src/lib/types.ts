@@ -1,4 +1,4 @@
-export type LoginResponse = { token: string };
+export type LoginResponse = { token: string; role: string; name: string; email: string; };
 
 export type DatabaseConnection = {
   id: number;
@@ -11,8 +11,12 @@ export type DatabaseConnection = {
 export type TenantSettings = {
   tenantId: number;
   tenantName: string;
+  aiProvider: string;
+  aiModel: string | null;
   geminiApiKeyConfigured: boolean;
   geminiApiKeyMasked: string | null;
+  claudeApiKeyConfigured: boolean;
+  claudeApiKeyMasked: string | null;
 };
 
 export type Suggestion = {
@@ -33,6 +37,15 @@ export type AgentTokenCreated = {
   token: string;
   description: string;
   databaseConnectionId: number;
+  createdAt: string;
+};
+
+export type AgentTokenResponse = {
+  id: number;
+  description: string;
+  databaseConnectionId: number;
+  databaseConnectionName: string;
+  tokenSuffix: string;
   createdAt: string;
 };
 

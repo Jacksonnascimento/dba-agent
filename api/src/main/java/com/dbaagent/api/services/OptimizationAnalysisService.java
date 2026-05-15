@@ -31,6 +31,7 @@ public class OptimizationAnalysisService {
     private final LinterService linterService;
     private final SemanticCacheService semanticCacheService;
     private final GeminiIntegrationService geminiIntegrationService;
+    private final ClaudeIntegrationService claudeIntegrationService;
     private final OptimizationSuggestionRepository suggestionRepository;
     private final ObjectMapper objectMapper;
     private final DatabaseTelemetrySnapshotService snapshotService;
@@ -39,12 +40,14 @@ public class OptimizationAnalysisService {
             LinterService linterService,
             SemanticCacheService semanticCacheService,
             GeminiIntegrationService geminiIntegrationService,
+            ClaudeIntegrationService claudeIntegrationService,
             OptimizationSuggestionRepository suggestionRepository,
             ObjectMapper objectMapper,
             DatabaseTelemetrySnapshotService snapshotService) {
         this.linterService = linterService;
         this.semanticCacheService = semanticCacheService;
         this.geminiIntegrationService = geminiIntegrationService;
+        this.claudeIntegrationService = claudeIntegrationService;
         this.suggestionRepository = suggestionRepository;
         this.objectMapper = objectMapper;
         this.snapshotService = snapshotService;
@@ -114,30 +117,38 @@ public class OptimizationAnalysisService {
             }
         }
 
-        String model = StringUtils.hasText(aiModel) ? aiModel : DEFAULT_AI_MODEL;
+        String provider = tenant.getAiProvider() != null ? tenant.getAiProvider() : "GEMINI";
+        String model = StringUtils.hasText(tenant.getAiModel()) ? tenant.getAiModel() :
+                (StringUtils.hasText(aiModel) ? aiModel : ("CLAUDE".equals(provider) ? "claude-3-5-sonnet-20241022" : DEFAULT_AI_MODEL));
         String engine = StringUtils.hasText(dbEngine) ? dbEngine : databaseConnection.getDbEngine();
 
-        if (!StringUtils.hasText(tenant.getGeminiApiKey())) {
-            String msg = "Configure a chave Gemini (BYOK) no tenant para análise por IA. Linter e cache não retornaram resultado útil.";
-            OptimizationSuggestion saved = saveSuggestion(tenant, databaseConnection, hash, dbName, tableName, msg,
-                    "-- Aguardando configuração de API key no tenant.\n",
-                    "-- N/A\n",
-                    SuggestionStatus.PENDING);
-            saved.setSchemaHash(hash);
-            saved.setContextHash(hash);
-            return suggestionRepository.save(saved);
-        }
+        AiAnalysisResultDTO ai;
 
-        AiAnalysisResultDTO ai = geminiIntegrationService.analyzeWithGeminiRich(
-                ddl,
-                dmvStats,
-                null,
-                null,
-                null,
-                null,
-                tenant.getGeminiApiKey(),
-                model,
-                engine);
+        if ("CLAUDE".equals(provider)) {
+            if (!StringUtils.hasText(tenant.getClaudeApiKey())) {
+                String msg = "Configure a chave Claude (BYOK) no tenant para análise por IA.";
+                OptimizationSuggestion saved = saveSuggestion(tenant, databaseConnection, hash, dbName, tableName, msg,
+                        "-- Aguardando configuração de API key no tenant.\n", "-- N/A\n", SuggestionStatus.PENDING);
+                saved.setSchemaHash(hash);
+                saved.setContextHash(hash);
+                return suggestionRepository.save(saved);
+            }
+            ai = claudeIntegrationService.analyzeWithClaudeRich(
+                    ddl, dmvStats, null, null, null, null,
+                    tenant.getClaudeApiKey(), model, engine);
+        } else {
+            if (!StringUtils.hasText(tenant.getGeminiApiKey())) {
+                String msg = "Configure a chave Gemini (BYOK) no tenant para análise por IA.";
+                OptimizationSuggestion saved = saveSuggestion(tenant, databaseConnection, hash, dbName, tableName, msg,
+                        "-- Aguardando configuração de API key no tenant.\n", "-- N/A\n", SuggestionStatus.PENDING);
+                saved.setSchemaHash(hash);
+                saved.setContextHash(hash);
+                return suggestionRepository.save(saved);
+            }
+            ai = geminiIntegrationService.analyzeWithGeminiRich(
+                    ddl, dmvStats, null, null, null, null,
+                    tenant.getGeminiApiKey(), model, engine);
+        }
 
         if (!StringUtils.hasText(ai.getUpScript()) && StringUtils.hasText(ai.getDiagnostico())
                 && ai.getDiagnostico().startsWith("Erro ao processar integração:")) {
@@ -252,30 +263,38 @@ public class OptimizationAnalysisService {
             }
         }
 
-        String model = StringUtils.hasText(aiModel) ? aiModel : DEFAULT_AI_MODEL;
+        String provider = tenant.getAiProvider() != null ? tenant.getAiProvider() : "GEMINI";
+        String model = StringUtils.hasText(tenant.getAiModel()) ? tenant.getAiModel() :
+                (StringUtils.hasText(aiModel) ? aiModel : ("CLAUDE".equals(provider) ? "claude-3-5-sonnet-20241022" : DEFAULT_AI_MODEL));
         String engine = StringUtils.hasText(dbEngine) ? dbEngine : databaseConnection.getDbEngine();
 
-        if (!StringUtils.hasText(tenant.getGeminiApiKey())) {
-            String msg = "Configure a chave Gemini (BYOK) no tenant para análise por IA. Linter e cache não retornaram resultado útil.";
-            OptimizationSuggestion saved = saveSuggestion(tenant, databaseConnection, contextHash, dbName, tableName, msg,
-                    "-- Aguardando configuração de API key no tenant.\n",
-                    "-- N/A\n",
-                    SuggestionStatus.PENDING);
-            saved.setSchemaHash(schemaHash);
-            saved.setContextHash(contextHash);
-            return suggestionRepository.save(saved);
-        }
+        AiAnalysisResultDTO ai;
 
-        AiAnalysisResultDTO ai = geminiIntegrationService.analyzeWithGeminiRich(
-                ddl,
-                dmvStats,
-                waitStats,
-                topQueries,
-                executionPlans,
-                indexStats,
-                tenant.getGeminiApiKey(),
-                model,
-                engine);
+        if ("CLAUDE".equals(provider)) {
+            if (!StringUtils.hasText(tenant.getClaudeApiKey())) {
+                String msg = "Configure a chave Claude (BYOK) no tenant para análise por IA.";
+                OptimizationSuggestion saved = saveSuggestion(tenant, databaseConnection, contextHash, dbName, tableName, msg,
+                        "-- Aguardando configuração de API key no tenant.\n", "-- N/A\n", SuggestionStatus.PENDING);
+                saved.setSchemaHash(schemaHash);
+                saved.setContextHash(contextHash);
+                return suggestionRepository.save(saved);
+            }
+            ai = claudeIntegrationService.analyzeWithClaudeRich(
+                    ddl, dmvStats, waitStats, topQueries, executionPlans, indexStats,
+                    tenant.getClaudeApiKey(), model, engine);
+        } else {
+            if (!StringUtils.hasText(tenant.getGeminiApiKey())) {
+                String msg = "Configure a chave Gemini (BYOK) no tenant para análise por IA.";
+                OptimizationSuggestion saved = saveSuggestion(tenant, databaseConnection, contextHash, dbName, tableName, msg,
+                        "-- Aguardando configuração de API key no tenant.\n", "-- N/A\n", SuggestionStatus.PENDING);
+                saved.setSchemaHash(schemaHash);
+                saved.setContextHash(contextHash);
+                return suggestionRepository.save(saved);
+            }
+            ai = geminiIntegrationService.analyzeWithGeminiRich(
+                    ddl, dmvStats, waitStats, topQueries, executionPlans, indexStats,
+                    tenant.getGeminiApiKey(), model, engine);
+        }
 
         try {
             String cachePayload = objectMapper.writeValueAsString(ai);
