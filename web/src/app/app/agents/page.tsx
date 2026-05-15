@@ -115,7 +115,9 @@ export default function AgentsPage() {
   const handleDownloadAgent = async (id: number, os: string) => {
     try {
       const token = getToken();
-      const url = `http://localhost:8080/api/v1/agent-workers/${id}/agent-bundle?os=${os}`;
+      // Correção: Utilizando a variável de ambiente em vez do localhost fixo
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
+      const url = `${baseUrl}/agent-workers/${id}/agent-bundle?os=${os}`;
       
       const res = await fetch(url, {
         headers: {
