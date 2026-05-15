@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import type { DatabaseConnection } from "@/lib/types";
 
@@ -18,7 +18,6 @@ export default function DatabasesPage() {
   const [database, setDatabase] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [snapshotIntervalMinutes, setSnapshotIntervalMinutes] = useState<number>(1440);
 
   const [creating, setCreating] = useState(false);
 
@@ -55,7 +54,6 @@ export default function DatabasesPage() {
     setDatabase("");
     setUsername("");
     setPassword("");
-    setSnapshotIntervalMinutes(1440);
     setActive(true);
   }
 
@@ -69,7 +67,6 @@ export default function DatabasesPage() {
     setDatabase("");
     setUsername("");
     setPassword("");
-    setSnapshotIntervalMinutes(db.snapshotIntervalMinutes || 1440);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -106,7 +103,7 @@ export default function DatabasesPage() {
             setError(null);
             try {
               const payload = {
-                name, dbEngine, host, port: port === "" ? null : Number(port), database, username, password, active, snapshotIntervalMinutes
+                name, dbEngine, host, port: port === "" ? null : Number(port), database, username, password, active
               };
 
               if (editingId) {
@@ -209,19 +206,6 @@ export default function DatabasesPage() {
               value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="Sua senha segura" required={!editingId}
             />
-          </div>
-          <div className="space-y-1 sm:col-span-4">
-            <label className="text-xs text-zinc-400">Intervalo de Extração (Minutos)</label>
-            <select
-              className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
-              value={snapshotIntervalMinutes} onChange={(e) => setSnapshotIntervalMinutes(Number(e.target.value))}
-            >
-              <option value={5}>5 Minutos (Teste)</option>
-              <option value={60}>1 Hora</option>
-              <option value={360}>6 Horas</option>
-              <option value={720}>12 Horas</option>
-              <option value={1440}>24 Horas</option>
-            </select>
           </div>
 
           <div className="sm:col-span-4 flex gap-2 mt-2">
