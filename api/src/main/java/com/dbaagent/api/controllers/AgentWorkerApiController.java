@@ -49,7 +49,7 @@ public class AgentWorkerApiController {
                 dbToken.setDatabaseConnection(db);
                 dbToken.setToken(java.util.UUID.randomUUID().toString());
                 dbToken.setDescription("Auto-gerado para " + db.getName());
-                dbToken.setIsActive(true);
+                dbToken.setActive(true); // CORRIGIDO: Lombok gera setActive() para boolean isActive/active
                 tokenRepository.save(dbToken);
             } else {
                 dbToken = tokenOpt.get();
