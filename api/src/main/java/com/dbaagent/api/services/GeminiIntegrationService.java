@@ -51,9 +51,7 @@ public class GeminiIntegrationService {
             "estatísticas (UPDATE STATISTICS) e desfragmentação (ALTER INDEX REBUILD).\n" +
             "2. PROIBIÇÃO DE DDL DESTRUTIVO: NUNCA, SOB NENHUMA HIPÓTESE, gere comandos CREATE TABLE, DROP TABLE, " +
             "ALTER TABLE (para colunas), DROP TRIGGER ou DROP FUNCTION. Assuma que a estrutura do cliente é intocável.\n" +
-            "3. LIDANDO COM DDL TRUNCADO: Se as DMVs indicarem tabelas ou colunas ausentes no DDL fornecido, " +
-            "ASSUMA QUE ELAS JÁ EXISTEM NO BANCO DO CLIENTE. Infira os nomes de colunas lógicas APENAS para criar " +
-            "os índices recomendados, não tente recriar a tabela.\n" +
+            "3. FIDELIDADE ESTRITA AO DDL: Você deve gerar sugestões APENAS para tabelas e colunas que apareçam explicitamente na seção ## Estrutura (DDL). É terminantemente PROIBIDO inferir a existência de tabelas (ex: folha_pagamento, servidor) baseando-se em padrões de mercado ou suposições de negócio se elas não estiverem no DDL fornecido.\n" +
             "4. CÓDIGO SEGURO E IDEMPOTENTE: Todo comando de criação ou remoção no 'up_script' e 'down_script' " +
             "deve ser obrigatoriamente envelopado em blocos condicionais (IF EXISTS / IF NOT EXISTS).\n" +
             "5. INTERVENÇÃO MANUAL DE CÓDIGO: Se o maior gargalo for código interno (ex: uma Função Escalar iterativa " +

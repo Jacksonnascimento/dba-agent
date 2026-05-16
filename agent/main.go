@@ -311,7 +311,7 @@ func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 		var waits, topq, idxstats, plans string
 
 		if strings.EqualFold(target.DbEngine, "SQL Server") {
-			db, err := ConnectDB(target.DbConnString)
+			db, err := ConnectDB(target.DbEngine, target.DbConnString)
 			if err != nil {
 				log.Printf("❌ [TELEMETRIA - %s] Erro crítico ao conectar no alvo: %v\n", target.Name, err)
 				continue
@@ -326,8 +326,24 @@ func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 
 			db.Close()
 			log.Printf("📦 [TELEMETRIA - %s] Dados extraídos com sucesso.\n", target.Name)
+		} else if strings.EqualFold(target.DbEngine, "PostgreSQL") {
+			db, err := ConnectDB(target.DbEngine, target.DbConnString)
+			if err != nil {
+				log.Printf("❌ [TELEMETRIA - %s] Erro crítico ao conectar no alvo PostgreSQL: %v\n", target.Name, err)
+				continue
+			}
+
+			ddl, _ = ExtractSchemaPostgres(db)
+			dmv, _ = ExtractMissingIndexesPostgres(db)
+			waits, _ = ExtractWaitStatsPostgres(db)
+			topq, _ = ExtractTopQueriesPostgres(db)
+			idxstats, _ = ExtractIndexStatsPostgres(db)
+			plans, _ = ExtractExecutionPlansPostgres(db)
+
+			db.Close()
+			log.Printf("📦 [TELEMETRIA - %s] Dados PostgreSQL extraídos com sucesso.\n", target.Name)
 		} else {
-			log.Printf("⚠️ [TELEMETRIA - %s] Engine %s não suportada no momento.\n", target.Name, target.DbEngine)
+			log.Printf("⚠️ [TELEMETRIA - %s] Engine '%s' não suportada no momento.\n", target.Name, target.DbEngine)
 			continue
 		}
 
@@ -369,14 +385,15 @@ func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
 				continue
 			}
 
-			if strings.EqualFold(target.DbEngine, "SQL Server") {
-				db, err := ConnectDB(target.DbConnString)
+			// Roteia a execução do script baseado na engine
+			if strings.EqualFold(target.DbEngine, "SQL Server") || strings.EqualFold(target.DbEngine, "PostgreSQL") {
+				db, err := ConnectDB(target.DbEngine, target.DbConnString)
 				if err != nil {
 					log.Printf("❌ [TAREFAS - %s] Falha de conexão na Tarefa %d: %v\n", target.Name, task.ID, err)
 					continue
 				}
 
-				log.Printf("⚡ [TAREFAS - %s] Aplicando %s no banco de dados...", target.Name, tipoStr)
+				log.Printf("⚡ [TAREFAS - %s] Aplicando %s no banco de dados (%s)...", target.Name, tipoStr, target.DbEngine)
 				err = ExecuteScript(db, scriptParaRodar)
 				db.Close()
 
@@ -386,6 +403,8 @@ func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
 					continue
 				}
 				log.Printf("✅ [TAREFAS - %s] %s executado com sucesso!\n", target.Name, tipoStr)
+			} else {
+				log.Printf("⚠️ [TAREFAS - %s] Engine '%s' não suportada para execução de scripts.\n", target.Name, target.DbEngine)
 			}
 			MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
 		}

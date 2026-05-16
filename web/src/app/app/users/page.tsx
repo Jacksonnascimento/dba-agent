@@ -120,6 +120,12 @@ export default function UsersPage() {
   }
 
   async function handleToggleActive(u: User) {
+    // Atualização otimista: muda o estado local imediatamente
+    setUsers((prev) =>
+      prev.map((item) =>
+        item.id === u.id ? { ...item, active: !u.active } : item
+      )
+    );
     try {
       await apiFetch(`/users/${u.id}`, {
         method: "PUT",
@@ -131,8 +137,13 @@ export default function UsersPage() {
         }),
       });
       toast.success(`Usuário ${!u.active ? "ativado" : "desativado"} com sucesso!`);
-      fetchData();
     } catch (e: any) {
+      // Reverte em caso de erro
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === u.id ? { ...item, active: u.active } : item
+        )
+      );
       toast.error(e?.message || "Falha ao alterar status do usuário");
     }
   }
