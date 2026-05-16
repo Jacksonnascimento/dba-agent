@@ -75,6 +75,7 @@ public class UserController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
+        
     }
 
     @PutMapping("/{id}/password")
