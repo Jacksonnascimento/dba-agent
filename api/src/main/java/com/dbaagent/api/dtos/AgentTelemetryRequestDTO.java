@@ -16,6 +16,7 @@ public class AgentTelemetryRequestDTO {
     private String executionPlans;
     private String indexStats;
 
+    
     public AgentTelemetryRequestDTO() {}
 
     // Getters e Setters
