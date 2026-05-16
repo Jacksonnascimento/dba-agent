@@ -76,7 +76,7 @@ public class UserService {
     }
 
     public User updateUser(Long userId, String name, String email, String role, Boolean active) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdWithTenant(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
         
         Optional<User> existingUser = userRepository.findByEmail(email);

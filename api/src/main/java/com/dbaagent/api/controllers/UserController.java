@@ -62,14 +62,16 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acesso negado");
         }
         try {
-            User user = userService.updateUser(
+            userService.updateUser(
                     id,
                     (String) body.get("name"),
                     (String) body.get("email"),
                     (String) body.get("role"),
                     body.containsKey("active") ? (Boolean) body.get("active") : null
             );
-            return ResponseEntity.ok(mapToDto(user));
+            User updatedUser = userRepository.findByIdWithTenant(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+            return ResponseEntity.ok(mapToDto(updatedUser));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
