@@ -3,6 +3,7 @@ package com.dbaagent.api.security;
 import org.springframework.beans.factory.annotation.Value; // Importação importante
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,6 +20,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     // Injeta a URL permitida definida no application.yml / Variável de ambiente
@@ -54,6 +56,7 @@ public class SecurityConfig {
                 
                 // Rotas exclusivas de Administração
                 .requestMatchers("/api/v1/admin/**").hasAuthority("ROLE_ADMIN")
+                .requestMatchers("/api/v1/tenants/**").hasAuthority("ROLE_ADMIN")
                 
                 // Qualquer outra rota exige estar autenticado
                 .anyRequest().authenticated()

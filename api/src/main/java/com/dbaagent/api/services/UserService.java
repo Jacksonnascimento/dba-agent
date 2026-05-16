@@ -4,8 +4,10 @@ import com.dbaagent.api.entities.Tenant;
 import com.dbaagent.api.entities.User;
 import com.dbaagent.api.repositories.TenantRepository;
 import com.dbaagent.api.repositories.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,23 +26,28 @@ public class UserService {
     }
 
     public List<User> findAll() {
-        return userRepository.findAll();
+        return userRepository.findAllWithTenant();
     }
 
-    public User createUser(String name, String email, String password, String role) {
+    public User createUser(String name, String email, String password, String role, Long tenantId) {
         if (userRepository.findByEmail(email).isPresent()) {
             throw new IllegalArgumentException("E-mail já está em uso.");
         }
 
-        // Recuperar o Tenant existente ou criar um se não houver
         Tenant tenant;
-        List<Tenant> tenants = tenantRepository.findAll();
-        if (tenants.isEmpty()) {
-            tenant = new Tenant();
-            tenant.setName("Default Tenant");
-            tenant = tenantRepository.save(tenant);
+        if (tenantId != null) {
+            tenant = tenantRepository.findById(tenantId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant não encontrado."));
         } else {
-            tenant = tenants.get(0); // Por simplicidade, assume single-tenant ou tenant único por enquanto
+            // fallback para garantir compatibilidade com DataLoader/InitialSetupConfig
+            List<Tenant> tenants = tenantRepository.findAll();
+            if (tenants.isEmpty()) {
+                tenant = new Tenant();
+                tenant.setName("Default Tenant");
+                tenant = tenantRepository.save(tenant);
+            } else {
+                tenant = tenants.get(0);
+            }
         }
 
         User user = new User();
@@ -56,6 +63,13 @@ public class UserService {
 
     public User changePassword(Long userId, String newPassword) {
         User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        return userRepository.save(user);
+    }
+
+    public User changeOwnPassword(String email, String newPassword) {
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("Usuário não encontrado."));
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         return userRepository.save(user);

@@ -35,16 +35,20 @@ public class UserController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createUser(@RequestBody Map<String, String> body, Authentication authentication) {
+    public ResponseEntity<?> createUser(@RequestBody Map<String, Object> body, Authentication authentication) {
         if (!isAdmin(authentication)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Acesso negado");
         }
         try {
+            Long tenantId = body.get("tenantId") != null
+                    ? Long.valueOf(body.get("tenantId").toString())
+                    : null;
             User user = userService.createUser(
-                    body.get("name"),
-                    body.get("email"),
-                    body.get("password"),
-                    body.getOrDefault("role", "ROLE_CLIENT")
+                    (String) body.get("name"),
+                    (String) body.get("email"),
+                    (String) body.get("password"),
+                    body.getOrDefault("role", "ROLE_CLIENT").toString(),
+                    tenantId
             );
             return ResponseEntity.ok(mapToDto(user));
         } catch (IllegalArgumentException e) {
@@ -90,19 +94,33 @@ public class UserController {
         }
     }
 
+    @PutMapping("/me/password")
+    public ResponseEntity<?> changeOwnPassword(@RequestBody Map<String, String> body, Authentication authentication) {
+        try {
+            userService.changeOwnPassword(authentication.getName(), body.get("password"));
+            return ResponseEntity.ok(Map.of("message", "Senha alterada com sucesso"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
     private boolean isAdmin(Authentication authentication) {
         return authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
     private Map<String, Object> mapToDto(User user) {
-        return Map.of(
-                "id", user.getId(),
-                "name", user.getName(),
-                "email", user.getEmail(),
-                "role", user.getRole(),
-                "active", user.getActive(),
-                "createdAt", user.getCreatedAt()
-        );
+        Map<String, Object> dto = new java.util.HashMap<>();
+        dto.put("id", user.getId());
+        dto.put("name", user.getName());
+        dto.put("email", user.getEmail());
+        dto.put("role", user.getRole());
+        dto.put("active", user.getActive());
+        dto.put("createdAt", user.getCreatedAt());
+        if (user.getTenant() != null) {
+            dto.put("tenantId", user.getTenant().getId());
+            dto.put("tenantName", user.getTenant().getName());
+        }
+        return dto;
     }
 }

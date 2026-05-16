@@ -50,6 +50,7 @@ public class SuggestionManagementService {
         }
         
         return suggestions.stream()
+                .filter(s -> !"FORCE_TELEMETRY".equals(s.getSchemaHash()))
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
@@ -82,6 +83,7 @@ public class SuggestionManagementService {
         }
         
         return suggestions.stream()
+                .filter(s -> !"FORCE_TELEMETRY".equals(s.getSchemaHash()))
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());
     }
@@ -106,7 +108,7 @@ public class SuggestionManagementService {
                 suggestion,
                 "APPROVED",
                 "USER",
-                "user:" + user.getId(),
+                "user:" + user.getId() + ":" + user.getName(),
                 "Sugestão aprovada no painel");
         
         return mapToDTO(suggestion);
@@ -131,7 +133,7 @@ public class SuggestionManagementService {
                 suggestion,
                 "REJECTED",
                 "USER",
-                "user:" + user.getId(),
+                "user:" + user.getId() + ":" + user.getName(),
                 "Sugestão rejeitada no painel");
         
         return mapToDTO(suggestion);
@@ -156,7 +158,7 @@ public class SuggestionManagementService {
                 suggestion,
                 "ROLLBACK_REQUESTED",
                 "USER",
-                "user:" + user.getId(),
+                "user:" + user.getId() + ":" + user.getName(),
                 "Rollback solicitado pelo usuário");
         
         return mapToDTO(suggestion);
