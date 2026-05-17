@@ -41,6 +41,7 @@ public class OptimizationController {
         OptimizationSuggestion saved = optimizationAnalysisService.analyzeAndPersist(
                 authenticatedUser.getTenant(),
                 databaseConnection,
+                null,
                 requestDTO.getSchemaDdl(),
                 requestDTO.getDmvStats(),
                 requestDTO.getDbEngine(),

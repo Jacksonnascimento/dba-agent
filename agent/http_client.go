@@ -40,7 +40,7 @@ var client = &http.Client{
 }
 
 // Envia os dados do banco para a API Central analisar
-func SendTelemetry(apiURL string, token string, reqBody TelemetryRequest) {
+func SendTelemetry(apiURL string, workerToken string, agentToken string, reqBody TelemetryRequest) {
 	url := fmt.Sprintf("%s/agent/telemetry", apiURL)
 
 	jsonData, err := json.Marshal(reqBody)
@@ -56,7 +56,8 @@ func SendTelemetry(apiURL string, token string, reqBody TelemetryRequest) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Agent-Token", token)
+	req.Header.Set("X-Agent-Token", agentToken)
+	req.Header.Set("X-Worker-Token", workerToken)
 
 	resp, err := client.Do(req)
 	if err != nil {

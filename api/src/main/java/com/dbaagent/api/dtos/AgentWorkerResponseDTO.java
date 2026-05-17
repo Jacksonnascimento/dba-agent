@@ -17,5 +17,6 @@ public class AgentWorkerResponseDTO {
     private String workerToken;
     private Integer snapshotIntervalMinutes;
     private List<DatabaseConnectionResponseDTO> databases;
+    private String aiInstructionsAddon;
     private LocalDateTime createdAt;
 }

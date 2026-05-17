@@ -16,5 +16,6 @@ public class DatabaseConnectionResponseDTO {
     private String name;
     private String dbEngine;
     private Boolean active;
+    private String aiInstructionsAddon;
     private LocalDateTime createdAt;
 }

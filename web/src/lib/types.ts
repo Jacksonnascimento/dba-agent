@@ -5,6 +5,7 @@ export type DatabaseConnection = {
   name: string;
   dbEngine: string;
   active: boolean;
+  aiInstructionsAddon?: string | null;
   createdAt: string;
 };
 

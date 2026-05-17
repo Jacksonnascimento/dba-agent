@@ -35,6 +35,9 @@ public class DatabaseConnection {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    @Column(name = "ai_instructions_addon", columnDefinition = "TEXT")
+    private String aiInstructionsAddon;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -84,6 +87,14 @@ public class DatabaseConnection {
 
     public void setActive(Boolean active) {
         this.isActive = active;
+    }
+
+    public String getAiInstructionsAddon() {
+        return aiInstructionsAddon;
+    }
+
+    public void setAiInstructionsAddon(String aiInstructionsAddon) {
+        this.aiInstructionsAddon = aiInstructionsAddon;
     }
 
     public LocalDateTime getCreatedAt() {

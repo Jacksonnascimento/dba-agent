@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Server, Plus, Edit, Zap, Download } from 'lucide-react';
+import { AiPromptFields } from "@/components/AiPromptFields";
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth-storage';
 import type { DatabaseConnection } from "@/lib/types";
@@ -12,6 +13,7 @@ export interface AgentWorker {
   name: string;
   workerToken: string;
   snapshotIntervalMinutes: number;
+  aiInstructionsAddon?: string | null;
   databases: DatabaseConnection[];
   createdAt: string;
 }
@@ -26,7 +28,8 @@ export default function AgentsPage() {
   const [name, setName] = useState("");
   const [interval, setInterval] = useState<number>(1440);
   const [selectedDbs, setSelectedDbs] = useState<number[]>([]);
-  
+  const [aiInstructionsAddon, setAiInstructionsAddon] = useState("");
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -60,6 +63,7 @@ export default function AgentsPage() {
     setName(agent.name);
     setInterval(agent.snapshotIntervalMinutes);
     setSelectedDbs(agent.databases.map(db => db.id));
+    setAiInstructionsAddon(agent.aiInstructionsAddon ?? "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -68,6 +72,7 @@ export default function AgentsPage() {
     setName("");
     setInterval(1440);
     setSelectedDbs([]);
+    setAiInstructionsAddon("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,7 +82,8 @@ export default function AgentsPage() {
       const payload = {
         name,
         snapshotIntervalMinutes: interval,
-        databaseConnectionIds: selectedDbs
+        databaseConnectionIds: selectedDbs,
+        aiInstructionsAddon: aiInstructionsAddon.trim() || null,
       };
 
       if (editingId) {
@@ -227,6 +233,19 @@ export default function AgentsPage() {
               )}
             </div>
           </div>
+
+          <AiPromptFields
+            dbEngine={
+              selectedDbs.length > 0
+                ? databases.find((d) => d.id === selectedDbs[0])?.dbEngine ?? "SQL Server"
+                : "SQL Server"
+            }
+            addon={aiInstructionsAddon}
+            onAddonChange={setAiInstructionsAddon}
+            agentWorkerId={editingId}
+            databaseConnectionId={selectedDbs[0] ?? null}
+            bankLabel="agente"
+          />
 
           <div className="flex gap-3">
             <button

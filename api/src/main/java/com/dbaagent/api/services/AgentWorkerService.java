@@ -34,13 +34,16 @@ public class AgentWorkerService {
     private final AgentWorkerRepository repository;
     private final DatabaseConnectionRepository dbRepository;
     private final OptimizationSuggestionRepository suggestionRepository;
+    private final AiPromptService aiPromptService;
 
     public AgentWorkerService(AgentWorkerRepository repository,
                               DatabaseConnectionRepository dbRepository,
-                              OptimizationSuggestionRepository suggestionRepository) {
+                              OptimizationSuggestionRepository suggestionRepository,
+                              AiPromptService aiPromptService) {
         this.repository = repository;
         this.dbRepository = dbRepository;
         this.suggestionRepository = suggestionRepository;
+        this.aiPromptService = aiPromptService;
     }
 
     @Transactional(readOnly = true)
@@ -56,6 +59,7 @@ public class AgentWorkerService {
         worker.setTenant(tenant);
         worker.setName(request.getName());
         worker.setSnapshotIntervalMinutes(request.getSnapshotIntervalMinutes());
+        applyAddon(worker, request.getAiInstructionsAddon());
 
         if (request.getDatabaseConnectionIds() != null && !request.getDatabaseConnectionIds().isEmpty()) {
             Set<DatabaseConnection> dbs = new HashSet<>(dbRepository.findAllById(request.getDatabaseConnectionIds()));
@@ -74,6 +78,7 @@ public class AgentWorkerService {
 
         worker.setName(request.getName());
         worker.setSnapshotIntervalMinutes(request.getSnapshotIntervalMinutes());
+        applyAddon(worker, request.getAiInstructionsAddon());
 
         if (request.getDatabaseConnectionIds() != null) {
             Set<DatabaseConnection> dbs = new HashSet<>(dbRepository.findAllById(request.getDatabaseConnectionIds()));
@@ -241,7 +246,13 @@ public class AgentWorkerService {
                 .workerToken(worker.getWorkerToken())
                 .snapshotIntervalMinutes(worker.getSnapshotIntervalMinutes())
                 .databases(dbs)
+                .aiInstructionsAddon(worker.getAiInstructionsAddon())
                 .createdAt(worker.getCreatedAt())
                 .build();
+    }
+
+    private void applyAddon(AgentWorker worker, String addon) {
+        aiPromptService.validateAddon(addon);
+        worker.setAiInstructionsAddon(aiPromptService.normalizeAddon(addon));
     }
 }

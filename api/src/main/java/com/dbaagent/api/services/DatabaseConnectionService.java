@@ -16,9 +16,11 @@ import java.util.List;
 public class DatabaseConnectionService {
 
     private final DatabaseConnectionRepository repository;
+    private final AiPromptService aiPromptService;
 
-    public DatabaseConnectionService(DatabaseConnectionRepository repository) {
+    public DatabaseConnectionService(DatabaseConnectionRepository repository, AiPromptService aiPromptService) {
         this.repository = repository;
+        this.aiPromptService = aiPromptService;
     }
 
     @Transactional
@@ -48,7 +50,8 @@ public class DatabaseConnectionService {
         // 4. Salva a URI formatada (O @Convert na Entidade cuidará da criptografia)
         connection.setConnectionUri(builtUri);
         connection.setActive(true);
-        
+        applyAddon(connection, request.getAiInstructionsAddon());
+
         return map(repository.save(connection));
     }
 
@@ -88,6 +91,8 @@ public class DatabaseConnectionService {
             connection.setConnectionUri(builtUri);
         }
 
+        applyAddon(connection, request.getAiInstructionsAddon());
+
         return map(repository.save(connection));
     }
 
@@ -97,7 +102,13 @@ public class DatabaseConnectionService {
                 .name(c.getName())
                 .dbEngine(c.getDbEngine())
                 .active(c.getActive())
+                .aiInstructionsAddon(c.getAiInstructionsAddon())
                 .createdAt(c.getCreatedAt())
                 .build();
+    }
+
+    private void applyAddon(DatabaseConnection connection, String addon) {
+        aiPromptService.validateAddon(addon);
+        connection.setAiInstructionsAddon(aiPromptService.normalizeAddon(addon));
     }
 }

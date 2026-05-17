@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import type { DatabaseConnection } from "@/lib/types";
+import { AiPromptFields } from "@/components/AiPromptFields";
 
 export default function DatabasesPage() {
   const [items, setItems] = useState<DatabaseConnection[]>([]);
@@ -18,6 +19,7 @@ export default function DatabasesPage() {
   const [database, setDatabase] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [aiInstructionsAddon, setAiInstructionsAddon] = useState("");
 
   const [creating, setCreating] = useState(false);
 
@@ -55,6 +57,7 @@ export default function DatabasesPage() {
     setUsername("");
     setPassword("");
     setActive(true);
+    setAiInstructionsAddon("");
   }
 
   function handleEditClick(db: DatabaseConnection) {
@@ -67,6 +70,7 @@ export default function DatabasesPage() {
     setDatabase("");
     setUsername("");
     setPassword("");
+    setAiInstructionsAddon(db.aiInstructionsAddon ?? "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -103,7 +107,8 @@ export default function DatabasesPage() {
             setError(null);
             try {
               const payload = {
-                name, dbEngine, host, port: port === "" ? null : Number(port), database, username, password, active
+                name, dbEngine, host, port: port === "" ? null : Number(port), database, username, password, active,
+                aiInstructionsAddon: aiInstructionsAddon.trim() || null,
               };
 
               if (editingId) {
@@ -205,6 +210,16 @@ export default function DatabasesPage() {
               className="w-full rounded-lg bg-zinc-950 border border-zinc-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-600"
               value={password} onChange={(e) => setPassword(e.target.value)}
               placeholder="Sua senha segura" required={!editingId}
+            />
+          </div>
+
+          <div className="sm:col-span-4">
+            <AiPromptFields
+              dbEngine={dbEngine}
+              addon={aiInstructionsAddon}
+              onAddonChange={setAiInstructionsAddon}
+              databaseConnectionId={editingId}
+              bankLabel="banco"
             />
           </div>
 

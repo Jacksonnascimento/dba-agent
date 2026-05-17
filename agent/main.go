@@ -230,7 +230,7 @@ func iniciarCicloWorker(apiURL string, workerToken string) {
 		globalConfig.mu.RLock()
 		targets := globalConfig.Targets
 		globalConfig.mu.RUnlock()
-		executarExtraçãoTelemetria(apiURL, targets)
+		executarExtraçãoTelemetria(apiURL, workerToken, targets)
 		lastRun = time.Now()
 
 		// Acorda frequentemente (30s) para verificar se é hora de rodar, permitindo mudanças dinâmicas
@@ -244,7 +244,7 @@ func iniciarCicloWorker(apiURL string, workerToken string) {
 			globalConfig.mu.RUnlock()
 
 			if len(targets) > 0 && time.Since(lastRun) >= interval {
-				executarExtraçãoTelemetria(apiURL, targets)
+				executarExtraçãoTelemetria(apiURL, workerToken, targets)
 				lastRun = time.Now()
 			}
 		}
@@ -263,7 +263,7 @@ func iniciarCicloWorker(apiURL string, workerToken string) {
 			globalConfig.mu.RLock()
 			targets := globalConfig.Targets
 			globalConfig.mu.RUnlock()
-			verificarEExecutarTarefas(apiURL, targets)
+			verificarEExecutarTarefas(apiURL, workerToken, targets)
 		}
 	}()
 
@@ -300,7 +300,7 @@ func updateGlobalConfig(apiConfigs []AgentConfigAPI) {
 	globalConfig.Interval = interval
 }
 
-func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
+func executarExtraçãoTelemetria(apiURL string, workerToken string, targets []AgentTarget) {
 	for _, target := range targets {
 		log.Printf("🔄 [TELEMETRIA - %s] Iniciando extração massiva...", target.Name)
 
@@ -358,18 +358,18 @@ func executarExtraçãoTelemetria(apiURL string, targets []AgentTarget) {
 			IndexStats:     limitPayload(idxstats, 12000),
 			ExecutionPlans: limitPayload(plans, 60000),
 		}
-		SendTelemetry(apiURL, target.AgentToken, telemetry)
+		SendTelemetry(apiURL, workerToken, target.AgentToken, telemetry)
 		log.Printf("✅ [TELEMETRIA - %s] Ciclo de extração finalizado.", target.Name)
 	}
 }
 
-func verificarEExecutarTarefas(apiURL string, targets []AgentTarget) {
+func verificarEExecutarTarefas(apiURL string, workerToken string, targets []AgentTarget) {
 	for _, target := range targets {
 		tasks := FetchPendingTasks(apiURL, target.AgentToken)
 		for _, task := range tasks {
 			if task.TaskType == "FORCE_TELEMETRY" {
 				log.Printf("⚡ [TAREFAS - %s] Comando de Extração Manual recebido (Tarefa #%d)!", target.Name, task.ID)
-				executarExtraçãoTelemetria(apiURL, []AgentTarget{target})
+				executarExtraçãoTelemetria(apiURL, workerToken, []AgentTarget{target})
 				MarkTaskCompleted(apiURL, target.AgentToken, task.ID)
 				continue
 			}

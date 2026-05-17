@@ -27,6 +27,9 @@ public class AgentWorker {
     @Column(name = "snapshot_interval_minutes", nullable = false)
     private Integer snapshotIntervalMinutes = 1440; // Default: 24h
 
+    @Column(name = "ai_instructions_addon", columnDefinition = "TEXT")
+    private String aiInstructionsAddon;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "agent_worker_databases",
@@ -59,6 +62,9 @@ public class AgentWorker {
 
     public Integer getSnapshotIntervalMinutes() { return snapshotIntervalMinutes; }
     public void setSnapshotIntervalMinutes(Integer snapshotIntervalMinutes) { this.snapshotIntervalMinutes = snapshotIntervalMinutes; }
+
+    public String getAiInstructionsAddon() { return aiInstructionsAddon; }
+    public void setAiInstructionsAddon(String aiInstructionsAddon) { this.aiInstructionsAddon = aiInstructionsAddon; }
 
     public Set<DatabaseConnection> getDatabases() { return databases; }
     public void setDatabases(Set<DatabaseConnection> databases) { this.databases = databases; }

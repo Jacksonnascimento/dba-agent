@@ -14,6 +14,8 @@ public class AgentWorkerUpdateRequestDTO {
 
     private List<Long> databaseConnectionIds;
 
+    private String aiInstructionsAddon;
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
@@ -22,4 +24,7 @@ public class AgentWorkerUpdateRequestDTO {
 
     public List<Long> getDatabaseConnectionIds() { return databaseConnectionIds; }
     public void setDatabaseConnectionIds(List<Long> databaseConnectionIds) { this.databaseConnectionIds = databaseConnectionIds; }
+
+    public String getAiInstructionsAddon() { return aiInstructionsAddon; }
+    public void setAiInstructionsAddon(String aiInstructionsAddon) { this.aiInstructionsAddon = aiInstructionsAddon; }
 }

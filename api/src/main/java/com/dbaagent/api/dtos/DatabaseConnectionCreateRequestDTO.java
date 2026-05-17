@@ -26,6 +26,8 @@ public class DatabaseConnectionCreateRequestDTO {
     @NotBlank(message = "Senha é obrigatória")
     private String password;
 
+    private String aiInstructionsAddon;
+
     // Getters and Setters
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -47,5 +49,8 @@ public class DatabaseConnectionCreateRequestDTO {
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
+    public String getAiInstructionsAddon() { return aiInstructionsAddon; }
+    public void setAiInstructionsAddon(String aiInstructionsAddon) { this.aiInstructionsAddon = aiInstructionsAddon; }
 
 }
