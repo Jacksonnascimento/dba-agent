@@ -140,29 +140,63 @@ public class AgentWorkerService {
 
             // 2. Write the install and uninstall scripts with arguments injected!
             String baseApiUrl = apiUrl + "/api/v1";
-            
+            String agentName = worker.getName() != null ? worker.getName().trim() : "";
+            String agentNameBatch = escapeBatchArg(agentName);
+            String agentNameShell = escapeShellSingleQuoted(agentName);
+
             if (os.equalsIgnoreCase("windows")) {
                 ZipEntry installEntry = new ZipEntry("install_service.bat");
                 zos.putNextEntry(installEntry);
-                String installContent = String.format("@echo off\ncd /d \"%%~dp0\"\necho Instalando o DBA Agent...\nagent-windows.exe -service install -api \"%s\" -token \"%s\"\nagent-windows.exe -service start\necho Servico instalado e rodando com sucesso!\npause", baseApiUrl, worker.getWorkerToken());
+                String installContent = String.format(
+                        "@echo off\r\n"
+                                + "cd /d \"%%~dp0\"\r\n"
+                                + "echo Instalando o DBA Agent (%s)...\r\n"
+                                + "agent-windows.exe -service install -api \"%s\" -token \"%s\" -name \"%s\"\r\n"
+                                + "agent-windows.exe -service start -name \"%s\"\r\n"
+                                + "echo Servico instalado e rodando com sucesso!\r\n"
+                                + "pause",
+                        agentNameBatch, baseApiUrl, worker.getWorkerToken(), agentNameBatch, agentNameBatch);
                 zos.write(installContent.getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
 
                 ZipEntry uninstallEntry = new ZipEntry("uninstall_service.bat");
                 zos.putNextEntry(uninstallEntry);
-                String uninstallContent = "@echo off\ncd /d \"%~dp0\"\necho Removendo o DBA Agent...\nagent-windows.exe -service stop\nagent-windows.exe -service uninstall\necho Servico removido com sucesso!\npause";
+                String uninstallContent = String.format(
+                        "@echo off\r\n"
+                                + "cd /d \"%%~dp0\"\r\n"
+                                + "echo Removendo o DBA Agent (%s)...\r\n"
+                                + "agent-windows.exe -service stop -name \"%s\"\r\n"
+                                + "agent-windows.exe -service uninstall -name \"%s\"\r\n"
+                                + "echo Servico removido com sucesso!\r\n"
+                                + "pause",
+                        agentNameBatch, agentNameBatch, agentNameBatch);
                 zos.write(uninstallContent.getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
             } else {
                 ZipEntry installEntry = new ZipEntry("install_service.sh");
                 zos.putNextEntry(installEntry);
-                String installContent = String.format("#!/bin/bash\nchmod +x agent-linux\n./agent-linux -service install -api \"%s\" -token \"%s\"\n./agent-linux -service start\necho 'Servico instalado e rodando!'\n", baseApiUrl, worker.getWorkerToken());
+                String installContent = String.format(
+                        "#!/bin/bash\n"
+                                + "cd \"$(dirname \"$0\")\"\n"
+                                + "chmod +x agent-linux\n"
+                                + "echo \"Instalando o DBA Agent (%s)...\"\n"
+                                + "./agent-linux -service install -api '%s' -token '%s' -name '%s'\n"
+                                + "./agent-linux -service start -name '%s'\n"
+                                + "echo 'Servico instalado e rodando!'\n",
+                        agentNameShell, baseApiUrl, worker.getWorkerToken(), agentNameShell, agentNameShell);
                 zos.write(installContent.getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
 
                 ZipEntry uninstallEntry = new ZipEntry("uninstall_service.sh");
                 zos.putNextEntry(uninstallEntry);
-                String uninstallContent = "#!/bin/bash\n./agent-linux -service stop\n./agent-linux -service uninstall\necho 'Servico removido!'\n";
+                String uninstallContent = String.format(
+                        "#!/bin/bash\n"
+                                + "cd \"$(dirname \"$0\")\"\n"
+                                + "echo \"Removendo o DBA Agent (%s)...\"\n"
+                                + "./agent-linux -service stop -name '%s'\n"
+                                + "./agent-linux -service uninstall -name '%s'\n"
+                                + "echo 'Servico removido!'\n",
+                        agentNameShell, agentNameShell, agentNameShell);
                 zos.write(uninstallContent.getBytes(StandardCharsets.UTF_8));
                 zos.closeEntry();
             }
@@ -172,6 +206,22 @@ public class AgentWorkerService {
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Erro ao gerar bundle: " + e.getMessage());
         }
+    }
+
+    /** Escapes a value embedded in double-quoted Windows batch arguments. */
+    private static String escapeBatchArg(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        return value.replace("%", "%%").replace("\"", "\"\"");
+    }
+
+    /** Escapes a value embedded in single-quoted POSIX shell arguments. */
+    private static String escapeShellSingleQuoted(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        return value.replace("'", "'\\''");
     }
 
     private AgentWorkerResponseDTO mapToDTO(AgentWorker worker) {

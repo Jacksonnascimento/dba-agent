@@ -143,18 +143,20 @@ func main() {
 	action := flag.String("service", "", "Ações do serviço: install, uninstall, start, stop, restart")
 	apiArg := flag.String("api", "", "URL da API")
 	tokenArg := flag.String("token", "", "Token do Worker")
+	nameArg := flag.String("name", "", "Nome do agente (como cadastrado no painel)")
 	flag.Parse()
 
-	// Configuração do serviço no Sistema Operacional
+	internalName, displayName := serviceNamesFromAgent(*nameArg)
+
 	svcArgs := []string{}
 	if *apiArg != "" && *tokenArg != "" {
 		svcArgs = []string{"-api", *apiArg, "-token", *tokenArg}
 	}
 
 	svcConfig := &service.Config{
-		Name:        "DBAAgentWorker",
-		DisplayName: "DBA Agent Worker",
-		Description: "Serviço de coleta e envio de métricas para o SaaS DBA Agent.",
+		Name:        internalName,
+		DisplayName: displayName,
+		Description: "DBA Agent — coleta e envio de métricas para o SaaS DBA Agent.",
 		Arguments:   svcArgs,
 	}
 
