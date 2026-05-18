@@ -31,7 +31,13 @@ export default function SuggestionsPage() {
       const q = dbId === "all" ? "" : `?databaseConnectionId=${encodeURIComponent(dbId)}`;
       const endpoint = activeTab === "pending" ? "/suggestions/pending" : "/suggestions/executed";
       const data = await apiFetch<Suggestion[]>(`${endpoint}${q}`);
-      setItems(data);
+      
+      // Ordenação decrescente por data (mais recentes primeiro) para ambas as abas
+      const sortedData = data.sort((a, b) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+      setItems(sortedData);
     } catch (e: any) {
       setError(e?.message ?? "Falha ao carregar sugestões");
     } finally {
@@ -272,4 +278,3 @@ export default function SuggestionsPage() {
     </div>
   );
 }
-

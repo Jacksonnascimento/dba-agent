@@ -38,6 +38,7 @@ public class OptimizationAnalysisService {
     private final ObjectMapper objectMapper;
     private final DatabaseTelemetrySnapshotService snapshotService;
     private final AiPromptService aiPromptService;
+    private final AiAnalysisPostProcessor aiAnalysisPostProcessor;
 
     public OptimizationAnalysisService(
             LinterService linterService,
@@ -47,7 +48,8 @@ public class OptimizationAnalysisService {
             OptimizationSuggestionRepository suggestionRepository,
             ObjectMapper objectMapper,
             DatabaseTelemetrySnapshotService snapshotService,
-            AiPromptService aiPromptService) {
+            AiPromptService aiPromptService,
+            AiAnalysisPostProcessor aiAnalysisPostProcessor) {
         this.linterService = linterService;
         this.semanticCacheService = semanticCacheService;
         this.geminiIntegrationService = geminiIntegrationService;
@@ -56,6 +58,7 @@ public class OptimizationAnalysisService {
         this.objectMapper = objectMapper;
         this.snapshotService = snapshotService;
         this.aiPromptService = aiPromptService;
+        this.aiAnalysisPostProcessor = aiAnalysisPostProcessor;
     }
 
     @Transactional
@@ -105,6 +108,7 @@ public class OptimizationAnalysisService {
             try {
                 AiAnalysisResultDTO fromCache = objectMapper.readValue(
                         cached.get().getSuggestedImprovement(), AiAnalysisResultDTO.class);
+                fromCache = aiAnalysisPostProcessor.process(fromCache, ddl);
                 OptimizationSuggestion saved = saveSuggestion(
                         tenant,
                         databaseConnection,
@@ -125,6 +129,7 @@ public class OptimizationAnalysisService {
 
         AiAnalysisResultDTO ai = callAi(
                 tenant, databaseConnection, agentWorker, ddl, dmvStats, null, null, null, null, dbEngine, aiModel);
+        ai = aiAnalysisPostProcessor.process(ai, ddl);
 
         if (!StringUtils.hasText(ai.getUpScript()) && StringUtils.hasText(ai.getDiagnostico())
                 && ai.getDiagnostico().startsWith("Erro ao processar integração:")) {
@@ -222,6 +227,7 @@ public class OptimizationAnalysisService {
             try {
                 AiAnalysisResultDTO fromCache = objectMapper.readValue(
                         cached.get().getSuggestedImprovement(), AiAnalysisResultDTO.class);
+                fromCache = aiAnalysisPostProcessor.process(fromCache, ddl);
                 OptimizationSuggestion saved = saveSuggestion(
                         tenant,
                         databaseConnection,
@@ -243,6 +249,7 @@ public class OptimizationAnalysisService {
         AiAnalysisResultDTO ai = callAi(
                 tenant, databaseConnection, agentWorker, ddl, dmvStats, waitStats, topQueries, executionPlans, indexStats,
                 dbEngine, aiModel);
+        ai = aiAnalysisPostProcessor.process(ai, ddl);
 
         try {
             String cachePayload = objectMapper.writeValueAsString(ai);
